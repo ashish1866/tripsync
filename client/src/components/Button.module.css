@@ -1,0 +1,62 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-5);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--lift);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-size: var(--text-md);
+  font-weight: 650;
+  line-height: 1.1;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.button:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+/* Pressed: the button sinks onto its shadow */
+.button:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.button:focus-visible {
+  box-shadow: var(--lift), var(--focus);
+}
+
+.button:disabled,
+.button[aria-busy='true'] {
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.primary {
+  background: var(--cap);
+}
+.primary:active {
+  background: var(--cap-pressed);
+}
+
+.plain {
+  background: var(--stone);
+}
+
+.danger {
+  background: var(--signal);
+  color: var(--stone);
+}

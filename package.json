@@ -1,0 +1,24 @@
+{
+  "name": "tripsync",
+  "private": true,
+  "description": "TripSync: collaborative trip planning and expense sharing (college full-stack project).",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently --names api,web --prefix-colors yellow,cyan --kill-others-on-fail \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "deploy": "npm run build -w client && npm run deploy -w server",
+    "test": "npm run test -w server",
+    "setup-db": "npm run setup-db -w server",
+    "check": "node checks/run.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.6",
+    "playwright-core": "1.64.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

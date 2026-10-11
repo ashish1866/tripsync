@@ -1,0 +1,79 @@
+/* The stone: a rectangle with a half-circle top, a yellow cap, a white face. */
+.stone {
+  display: inline-flex;
+  flex-direction: column;
+  background: var(--stone);
+  border: var(--line);
+  border-bottom-width: 6px; /* the stone sits on the ground */
+  /* 999px on both top corners always gives a perfect half circle,
+     whatever the width, because the browser scales the radii down to fit. */
+  border-radius: var(--radius-dome);
+  overflow: hidden;
+  text-align: center;
+  color: var(--ink);
+}
+
+.cap {
+  display: block;
+  background: var(--cap);
+  border-bottom: var(--line);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-painted);
+  font-weight: 700;
+  text-transform: uppercase; /* milestone lettering; see DESIGN-DECISIONS, D10 */
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.number {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  line-height: 0.95;
+}
+
+.caption {
+  font-family: var(--font-body);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+/* Sizes */
+.lg {
+  width: min(22rem, 78vw);
+  min-height: min(27rem, 96vw);
+}
+.lg .cap {
+  padding: var(--space-8) var(--space-4) var(--space-4);
+  font-size: var(--text-3xl);
+}
+.lg .number {
+  font-size: var(--text-stone);
+}
+.lg .caption {
+  font-size: var(--text-lg);
+  margin-top: var(--space-2);
+}
+
+.md {
+  width: 9rem;
+  min-height: 11rem;
+}
+.md .cap {
+  padding: var(--space-6) var(--space-2) var(--space-2);
+  font-size: var(--text-lg);
+}
+.md .number {
+  font-size: var(--text-2xl);
+}
+.md .caption {
+  font-size: var(--text-sm);
+}

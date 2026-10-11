@@ -1,0 +1,103 @@
+.page {
+  display: grid;
+  grid-template-columns: auto minmax(0, 36rem);
+  justify-content: start; /* keep spare width on the right, not between stone and board */
+  align-items: end;
+  gap: var(--space-8);
+  min-height: 100vh;
+  padding: var(--space-7) clamp(var(--space-4), 6vw, var(--space-8));
+}
+
+.stoneColumn {
+  align-self: end;
+}
+
+.board {
+  padding-bottom: var(--space-2);
+}
+
+.lead {
+  font-size: var(--text-lg);
+  line-height: 1.4;
+  max-width: 34rem;
+}
+
+.checks {
+  list-style: none;
+  margin: var(--space-6) 0;
+  padding: 0;
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.check {
+  display: grid;
+  grid-template-columns: 1.25rem 7rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.check + .check {
+  border-top: var(--line-thin);
+}
+
+.label {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+}
+
+.value {
+  color: var(--ink-muted);
+}
+
+/* Status mark: ink square = passed, red triangle = failed, dashed square = in progress */
+.mark {
+  width: 0.9rem;
+  height: 0.9rem;
+  align-self: center;
+}
+
+.ok .mark {
+  background: var(--ink);
+}
+
+.loading .mark {
+  border: 2px dashed var(--ink);
+  animation: turn 1.6s linear infinite;
+}
+
+.error .mark {
+  background: var(--signal);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.error .value {
+  color: var(--signal);
+  font-weight: 500;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(90deg);
+  }
+}
+
+@media (max-width: 52rem) {
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-6);
+    padding-top: var(--space-6);
+  }
+
+  .check {
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+  }
+
+  .value {
+    grid-column: 2;
+  }
+}

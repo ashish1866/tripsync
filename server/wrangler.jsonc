@@ -1,0 +1,31 @@
+// Cloudflare Worker settings for TripSync. No secrets in this file.
+// Secrets (MONGODB_URI, GEOAPIFY_KEY) are set with `npx wrangler secret put NAME`
+// for the live Worker, and in server/.dev.vars for local `wrangler dev`.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "tripsync",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  // Lets Express and the MongoDB driver use Node's http, net, tls and crypto modules.
+  "compatibility_flags": ["nodejs_compat"],
+
+  // The built React app. Cloudflare serves these files directly.
+  // Only /api/* runs the Worker code; any other unknown path gets index.html,
+  // so refreshing a deep link like /trips/123 still loads the React app.
+  "assets": {
+    "directory": "../client/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Turns on Workers Logs (including CPU time per request) in the dashboard.
+  "observability": {
+    "enabled": true
+  },
+
+  // Public settings (not secret).
+  "vars": {
+    "FIREBASE_PROJECT_ID": "tripsync-d3e9b",
+    "MONGODB_DB": "tripsync_dev"
+  }
+}

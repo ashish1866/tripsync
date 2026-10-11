@@ -1,0 +1,63 @@
+/*
+  TripSync design tokens. The ONLY place colours, type, spacing, radius,
+  borders and motion timings are defined. Every component reads from here.
+  The reasons behind each choice are in docs/DESIGN-DECISIONS.md.
+*/
+:root {
+  /* Colour: the kilometre stone */
+  --ground: #e4e5e0;      /* page: pale roadside concrete */
+  --stone: #f7f7f4;       /* surfaces: whitewashed stone face */
+  --ink: #16181b;         /* stencil paint: text, rules, outlines */
+  --ink-muted: #4a4e54;   /* secondary text (7.4:1 on --stone) */
+  --cap: #f3c10e;         /* National Highway milestone cap: identity fields only, never text on light */
+  --cap-pressed: #d9aa00; /* the cap colour while a button is held down */
+  --signal: #b81f17;      /* road-sign red: warnings, money owed, destructive actions (5:1 on --ground) */
+  --signal-wash: #f6dcd9; /* pale red ground behind a warning */
+
+  /* Type: Anek for painted lettering, Mukta for reading */
+  --font-display: 'Anek Latin Variable', 'Anek Devanagari Variable', 'Mukta', sans-serif;
+  --font-body: 'Mukta', 'Anek Devanagari Variable', sans-serif;
+  --stretch-painted: 75%;   /* condensed, like milestone lettering */
+  --stretch-sign: 88%;
+
+  /* Type scale (rem). Steps grow by about 1.33x so hierarchy is obvious. */
+  --text-sm: 0.875rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.875rem;
+  --text-2xl: 2.5rem;
+  --text-3xl: 3.5rem;
+  --text-stone: clamp(3rem, 9vw, 5.5rem);
+
+  /* Spacing: 4px base */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+
+  /* Shape: painted stone is flat. Edges are ink lines, not shadows. */
+  --line: 2px solid var(--ink);
+  --line-thin: 1px solid var(--ink);
+  --radius-sm: 3px;
+  --radius-dome: 999px 999px 0 0;  /* the rounded top of a kilometre stone */
+  --lift: 3px 3px 0 var(--ink);    /* a hard offset edge, like a stone's shadow at noon */
+
+  /* Motion: short and plain, no bounce */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --fast: 120ms;
+  --medium: 220ms;
+
+  /* Focus ring: always visible, on any surface */
+  --focus: 0 0 0 3px var(--stone), 0 0 0 6px var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fast: 0ms;
+    --medium: 0ms;
+  }
+}

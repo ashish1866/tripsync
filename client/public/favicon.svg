@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A kilometre stone: yellow cap, whitewashed face, ink outline. -->
+  <path d="M6 30V14a10 10 0 0 1 20 0v16z" fill="#F4F4F0" stroke="#16181B" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M7.25 14a8.75 8.75 0 0 1 17.5 0v1H7.25z" fill="#F3C10E"/>
+  <path d="M6 15.5h20" stroke="#16181B" stroke-width="2"/>
+  <path d="M11 21h10M11 25h6" stroke="#16181B" stroke-width="2.4" stroke-linecap="round"/>
+</svg>
