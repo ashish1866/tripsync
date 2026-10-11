@@ -16,6 +16,7 @@ const TABS = [
   { to: 'plan', label: 'Day plan' },
   { to: 'explore', label: 'Explore' },
   { to: 'money', label: 'Money' },
+  { to: 'packing', label: 'Packing' },
   { to: 'members', label: 'Members' },
   { to: 'settings', label: 'Trip settings', who: ['owner'] },
 ];
@@ -41,7 +42,9 @@ export default function TripLayout() {
     reload();
   }, [reload]);
 
-  const setTrip = useCallback((trip) => setState({ status: 'ready', trip }), []);
+  // Accepts a trip, or a function from the current trip to the next one, so two
+  // quick changes (two ticks in a row) each start from the latest list.
+  const setTrip = useCallback((next) => setState((s) => ({ status: 'ready', trip: typeof next === 'function' ? next(s.trip) : next })), []);
 
   // The forecast is loaded once per trip (and again if its dates change), and
   // shared by every tab. It has its own state, so if it fails only the weather

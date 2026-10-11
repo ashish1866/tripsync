@@ -11,6 +11,8 @@ import { createInvite, listInvites, revokeInvite } from '../controllers/invites.
 import { changeRole, ownerOrSelf, removeMember } from '../controllers/members.js';
 import { addExpense, budget, deleteExpense, editExpense, listExpenses, markPaid, ownBillOrOwner, settlements } from '../controllers/expenses.js';
 import { expenseBody, expenseParams, settlementBody } from '../schemas/expense.js';
+import { itemParams, newItemBody, tickBody } from '../schemas/checklist.js';
+import { addItem, deleteItem, tickItem } from '../controllers/checklist.js';
 import { weatherForTrip } from '../services/weather.js';
 import { nearbyPlaces } from '../services/places.js';
 import { placesQuery } from '../schemas/places.js';
@@ -38,6 +40,11 @@ router.delete('/:id/activities/:actId', requireMember, planners, validateParams(
 router.get('/:id/weather', requireMember, rateLimit('weather', LIMITS.weather), async (req, res) => {
   res.json({ weather: await weatherForTrip(req.trip) });
 });
+
+// The shared packing list (the list itself comes with GET /:id; only owner and editors change it)
+router.post('/:id/checklist', requireMember, planners, validateBody(newItemBody), addItem);
+router.patch('/:id/checklist/:itemId', requireMember, planners, validateParams(itemParams), validateBody(tickBody), tickItem);
+router.delete('/:id/checklist/:itemId', requireMember, planners, validateParams(itemParams), deleteItem);
 
 // Nearby places for Explore (any member): ?category=cafe&radius=5000
 router.get('/:id/places', requireMember, rateLimit('places', LIMITS.places), validateQuery(placesQuery), async (req, res) => {

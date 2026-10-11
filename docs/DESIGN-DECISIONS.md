@@ -135,6 +135,20 @@ Data choices:
 - Moving a stop to another day is one update computed inside MongoDB (take it out of every day, add it to the end of the new day), so other stops added meanwhile are kept.
 - At most 30 stops per day (409 with the reason). The stop search looks within 60 km of the destination, nearest first, through our API, so the Geoapify key never reaches the browser.
 
+## Packing list (Step 8)
+
+- **Packing tab** (`/trips/:id/packing`): "Packing list", the packed strip ("8 of 12 packed. 4 to go.", the same painted bar as the budget, cap yellow), then one row per item, then the add box. When everything is ticked the line says "Everything is packed." with no celebration. The Overview has a small Packing section with the same strip.
+- **The tick** is a painted square in a 2px ink outline: empty when not packed, filled ink with a stone-coloured check when packed. Under the paint it is a real checkbox (keyboard, screen readers), hidden visually. Hover makes the outline heavier, like every control; focus is the shared double ring. Packed items are shown in quieter text but never struck through, so they stay readable. Each row says "Added by Ashish" and, once ticked, "Packed by Dhruv", because a group wants to know who has the first-aid kit.
+- **Viewers** see the list, the ticks and who packed what, but every box is locked and there are no Add or Remove buttons (the API refuses them with 403 anyway). Stated in one plain line, not a greyed-out form.
+- **States:** empty is a dashed, unticked box and one sentence; adding nothing shows the error under the box; a tick that the server refuses is put back with the reason above the list.
+- Ticking and adding show at once; the screen settles to the server's copy of that one item, so two quick ticks never undo each other.
+
+Data choices:
+- The list is stored inside the trip (`checklist[]`: id, text, done, addedBy, createdAt, doneBy, doneAt). Every change is one update on one item (`$push`, `$pull`, or `$set` through an array filter), never load-change-save, so two people ticking two items at the same moment keep both.
+- A tick sends the state wanted (`done: true` or `false`), not "toggle", so pressing twice or two people pressing together cannot flip it back. Unticking clears who and when.
+- At most 100 items (409 with the reason, checked inside the same update). An item is at most 80 characters.
+- No editing of an item's wording, no categories and no ready-made lists: remove it and add it again. Starter lists would be invented content.
+
 ## Explore (Step 7)
 
 - **Explore tab** (`/trips/:id/explore`): "Around Manali", then four plates (Cafes, Restaurants, Places to stay, Things to see), a distance (within 2, 5 or 10 km of the centre) and, for owners and editors, "Add places to: Day 2". Changing any of them searches again.
@@ -204,6 +218,8 @@ Data choices:
 - A stranger gets 403 on a trip that exists and 404 on one that does not.
 
 ## Change log
+
+- 2026-10-12, Step 8: Packing tab (painted tick boxes, packed strip, who packed what), Packing section on the Overview, `PackedBar`.
 
 - 2026-10-12, Step 7: Explore tab (category plates, distance, add-to-day, results board with ink-capped stones, map pins that pick a place). StopNumber gained the ink-cap "place" version.
 

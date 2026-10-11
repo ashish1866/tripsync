@@ -4,6 +4,7 @@ import TripMap from '../../components/TripMap';
 import DayWeather from '../../components/DayWeather';
 import WeatherBox from '../../components/WeatherBox';
 import BudgetBar from '../../components/BudgetBar';
+import PackedBar from '../../components/PackedBar';
 import { placeLine, plural } from '../../utils/format';
 import { tripPins } from '../../utils/pins';
 import { ROLE_LABEL } from '../../utils/roles';
@@ -48,6 +49,15 @@ export default function Overview() {
           <BudgetBar spent={trip.spent} budget={trip.budget} />
           <p className={styles.note}>
             <Link to="money">Open the money</Link> for bills and who pays whom.
+          </p>
+        </section>
+        <section aria-labelledby="packing-title">
+          <h2 id="packing-title" className={styles.heading}>
+            Packing
+          </h2>
+          <PackedBar packed={trip.checklist.filter((i) => i.done).length} total={trip.checklist.length} />
+          <p className={styles.note}>
+            <Link to="packing">Open the packing list</Link>
           </p>
         </section>
         <section aria-labelledby="group-title">

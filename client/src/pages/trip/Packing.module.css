@@ -1,0 +1,186 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.board {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 42rem;
+}
+
+.heading {
+  font-size: var(--text-xl);
+  margin: 0;
+}
+
+.empty {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4);
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-sm);
+}
+
+.empty p {
+  margin: 0;
+}
+
+/* An unticked box, unpainted */
+.emptyTick {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px dashed var(--ink);
+  border-radius: 2px;
+}
+
+/* The list: a route board, one row per item */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.item {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+}
+
+.item + .item {
+  border-top: var(--line-thin);
+}
+
+.row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+/* The real checkbox: invisible but still in the tab order and read out */
+.box {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+/* The painted box: a square outlined in ink, filled ink with a stone tick when packed */
+.tick {
+  position: relative;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-top: 0.1rem;
+  background: var(--stone);
+  border: var(--line);
+  border-radius: 2px;
+}
+
+.box:checked + .tick {
+  background: var(--ink);
+}
+
+.box:checked + .tick::after {
+  content: '';
+  position: absolute;
+  inset: 0.3rem;
+  background: var(--stone);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0, 43% 62%);
+}
+
+/* Hover: the outline gets heavier, like every control */
+.row:hover .box:not(:disabled) + .tick {
+  outline: 2px solid var(--ink);
+  outline-offset: -4px;
+}
+
+.box:checked:hover + .tick {
+  outline-color: var(--stone);
+}
+
+.box:focus-visible + .tick {
+  box-shadow: var(--focus);
+}
+
+.box:disabled + .tick {
+  opacity: 0.6;
+}
+
+.row:has(.box:disabled) {
+  cursor: default;
+}
+
+.text {
+  display: grid;
+  min-width: 0;
+}
+
+.name {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  font-size: var(--text-lg);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+/* Packed items: quieter text, still fully readable (no strike-through) */
+.done .name {
+  color: var(--ink-muted);
+}
+
+.small {
+  flex: none;
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.field {
+  flex: 1 1 14rem;
+}
+
+/* Lines up with the input, below the label */
+.addButton {
+  margin-top: calc(var(--text-md) * 1.5 + var(--space-1));
+}
+
+.viewer {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--stone);
+}
+
+@media (max-width: 34rem) {
+  .item {
+    flex-wrap: wrap;
+  }
+
+  .small {
+    margin-left: calc(1.75rem + var(--space-3));
+  }
+}

@@ -38,7 +38,7 @@ Add/edit/delete (editors only their own). Equal or exact splits in paise with th
 Cafes, attractions, hotels, restaurants via Geoapify, `places` cache first. List plus map pins, distance, "Add to Day N". No ratings.
 - Done when: cafes near Manali appear; a second search for the same area uses the cache; "Add to Day 2" puts the place on Day 2.
 
-## - [ ] Step 8: Packing checklist
+## - [x] Step 8: Packing checklist
 Shared list, add, tick, delete, "8 of 12 packed". Editors and owner only for changes.
 - Done when: two accounts see each other's ticks after a refresh; a viewer ticking gets 403.
 

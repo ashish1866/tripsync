@@ -31,7 +31,154 @@ export async function addMember(ctx, tripId, user, role) {
   await ctx.db.collection('trips').updateOne({ _id: new ObjectId(tripId) }, { $push: { members: { uid: user.uid, role, joinedAt: new Date() } } });
 }
 
-const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks, exploreChecks];
+const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks, exploreChecks, packingChecks];
+
+// ====================== Step 8: packing checklist ======================
+async function packingChecks(ctx) {
+  const { call, record, hasError } = ctx;
+  ctx.setSection('Packing API');
+
+  const owner = await ctx.newUser('kowner', 'Ashish Check');
+  const editor = await ctx.newUser('keditor', 'Dhruv Check');
+  const viewer = await ctx.newUser('kviewer', 'Rohan Check');
+  const stranger = await ctx.newUser('kstranger', 'Ankit Check');
+  const trip = await makeTrip(ctx, owner);
+  await addMember(ctx, trip.id, editor, 'editor');
+  await addMember(ctx, trip.id, viewer, 'viewer');
+  const t = `/trips/${trip.id}`;
+  const listOf = async (user) => (await call('GET', t, { token: user.token })).data?.trip?.checklist || [];
+
+  const first = await call('POST', `${t}/checklist`, { token: owner.token, body: { text: '  Warm jacket  ' } });
+  record('Owner adds "Warm jacket": 201, trimmed, not packed, with who added it', first.status === 201 && first.data.item.text === 'Warm jacket' && first.data.item.done === false && first.data.item.addedBy === owner.uid, `HTTP ${first.status} ${first.data?.error ?? ''}`);
+  const second = await call('POST', `${t}/checklist`, { token: editor.token, body: { text: 'Power bank' } });
+  const third = await call('POST', `${t}/checklist`, { token: editor.token, body: { text: 'Rain cover' } });
+  record('An editor adds items too: 201', second.status === 201 && third.status === 201 && third.data.checklist.length === 3, `HTTP ${second.status}/${third.status}`);
+  const [jacket, bank, cover] = [first, second, third].map((r) => r.data?.item);
+
+  // Viewer, stranger, no login
+  const vAdd = await call('POST', `${t}/checklist`, { token: viewer.token, body: { text: 'Viewer item' } });
+  const vTick = await call('PATCH', `${t}/checklist/${jacket.id}`, { token: viewer.token, body: { done: true } });
+  const vDelete = await call('DELETE', `${t}/checklist/${jacket.id}`, { token: viewer.token });
+  record('A viewer adding, ticking or removing an item: 403 each', [vAdd, vTick, vDelete].every((r) => r.status === 403 && hasError(r)), [vAdd, vTick, vDelete].map((r) => r.status).join(','));
+  const sTick = await call('PATCH', `${t}/checklist/${jacket.id}`, { token: stranger.token, body: { done: true } });
+  const sRead = await call('GET', t, { token: stranger.token });
+  record('A stranger ticking or reading the list: 403', sTick.status === 403 && sRead.status === 403, `${sTick.status}/${sRead.status}`);
+  const noToken = await call('PATCH', `${t}/checklist/${jacket.id}`, { body: { done: true } });
+  record('Ticking without logging in: 401', noToken.status === 401, `HTTP ${noToken.status}`);
+  const afterViewer = await listOf(owner);
+  record('...and the viewer changed nothing', afterViewer.length === 3 && afterViewer.every((i) => !i.done), JSON.stringify(afterViewer.map((i) => i.done)));
+
+  // Bad input
+  const bad = [
+    ['an empty item', { text: '   ' }],
+    ['an item over 80 characters', { text: 'x'.repeat(81) }],
+    ['an item that is not text', { text: { $gt: '' } }],
+    ['an extra field (done)', { text: 'Torch', done: true }],
+  ];
+  for (const [label, body] of bad) {
+    const r = await call('POST', `${t}/checklist`, { token: owner.token, body });
+    record(`Adding ${label}: 400`, r.status === 400 && hasError(r), `HTTP ${r.status} ${r.data?.error ?? ''}`);
+  }
+  const badTicks = [['nothing', {}], ['"true" as text', { done: 'true' }], ['a text change', { done: true, text: 'Changed' }]];
+  for (const [label, body] of badTicks) {
+    const r = await call('PATCH', `${t}/checklist/${jacket.id}`, { token: owner.token, body });
+    record(`Ticking with ${label}: 400`, r.status === 400 && hasError(r), `HTTP ${r.status} ${r.data?.error ?? ''}`);
+  }
+  const ghost = await call('PATCH', `${t}/checklist/0000000000000000`, { token: owner.token, body: { done: true } });
+  record('Ticking an item that is not on the list: 404', ghost.status === 404 && hasError(ghost), `HTTP ${ghost.status}`);
+
+  // Ticking: who and when, and both accounts see it
+  const ticked = await call('PATCH', `${t}/checklist/${jacket.id}`, { token: editor.token, body: { done: true } });
+  const tickedItem = ticked.data?.checklist?.find((i) => i.id === jacket.id);
+  record('An editor ticks "Warm jacket": 200, packed, with who and when', ticked.status === 200 && tickedItem?.done === true && tickedItem.doneBy === editor.uid && Boolean(tickedItem.doneAt), `HTTP ${ticked.status} ${JSON.stringify(tickedItem)}`);
+  const ownerSees = (await listOf(owner)).find((i) => i.id === jacket.id);
+  const viewerSees = (await listOf(viewer)).find((i) => i.id === jacket.id);
+  record('The owner and a viewer both see the editor\'s tick after loading the trip again', ownerSees?.done === true && ownerSees.doneBy === editor.uid && viewerSees?.done === true, `${ownerSees?.done}/${viewerSees?.done}`);
+  const tickedTwice = await call('PATCH', `${t}/checklist/${jacket.id}`, { token: owner.token, body: { done: true } });
+  record('Ticking an already packed item keeps it packed (no flip)', tickedTwice.status === 200 && tickedTwice.data.checklist.find((i) => i.id === jacket.id).done === true, `HTTP ${tickedTwice.status}`);
+  const unticked = await call('PATCH', `${t}/checklist/${jacket.id}`, { token: owner.token, body: { done: false } });
+  const untickedItem = unticked.data?.checklist?.find((i) => i.id === jacket.id);
+  record('Unticking clears it, including who packed it', unticked.status === 200 && untickedItem?.done === false && untickedItem.doneBy === null && untickedItem.doneAt === null, JSON.stringify(untickedItem));
+
+  // Safe edits: two people tick two items at the same moment
+  const [a, b] = await Promise.all([
+    call('PATCH', `${t}/checklist/${bank.id}`, { token: owner.token, body: { done: true } }),
+    call('PATCH', `${t}/checklist/${cover.id}`, { token: editor.token, body: { done: true } }),
+  ]);
+  const both = await listOf(owner);
+  record('Two people tick two different items at the same moment: both ticks kept', a.status === 200 && b.status === 200 && both.find((i) => i.id === bank.id).done && both.find((i) => i.id === cover.id).done, both.map((i) => `${i.text}:${i.done}`).join(', '));
+
+  // Removing
+  const removed = await call('DELETE', `${t}/checklist/${cover.id}`, { token: editor.token });
+  const removedAgain = await call('DELETE', `${t}/checklist/${cover.id}`, { token: editor.token });
+  record('Removing an item: 200 and gone; removing it again: 404', removed.status === 200 && !removed.data.checklist.some((i) => i.id === cover.id) && removedAgain.status === 404, `HTTP ${removed.status} then ${removedAgain.status}`);
+
+  // The list holds at most 100
+  const full = await ctx.newUser('kfull', 'Kabir Check');
+  const fullTrip = await makeTrip(ctx, full);
+  await ctx.db.collection('trips').updateOne(
+    { _id: new ObjectId(fullTrip.id) },
+    { $set: { checklist: Array.from({ length: 100 }, (_, i) => ({ id: `filler${i}`, text: `Item ${i}`, done: false, addedBy: full.uid, createdAt: new Date(), doneBy: null, doneAt: null })) } },
+  );
+  const over = await call('POST', `/trips/${fullTrip.id}/checklist`, { token: full.token, body: { text: 'One too many' } });
+  record('A list with 100 items refuses the 101st: 409 with the reason', over.status === 409 && /100 items/.test(over.data?.error), `HTTP ${over.status} ${over.data?.error ?? ''}`);
+
+  // ---------- in the browser ----------
+  ctx.setSection('Packing in the browser');
+  const host = await ctx.newUser('kweb', 'Ashish Bisht');
+  const friend = await ctx.newUser('kwebfriend', 'Dhruv Grover');
+  const watcher = await ctx.newUser('kwebwatch', 'Rahul Viewer');
+  const webTrip = await makeTrip(ctx, host);
+  await addMember(ctx, webTrip.id, friend, 'editor');
+  await addMember(ctx, webTrip.id, watcher, 'viewer');
+  const mine = await ctx.openPage();
+  await ctx.login(mine.page, host);
+  await mine.page.goto(`${ctx.base}/trips/${webTrip.id}/packing`, { waitUntil: 'networkidle' });
+  const emptyShown = await mine.page.getByText('The list is empty.').waitFor({ timeout: 15000 }).then(() => true, () => false);
+  record('An empty list says so and offers the add box', emptyShown && (await mine.page.getByLabel('Add an item').count()) === 1);
+  await mine.page.getByRole('button', { name: 'Add to the list' }).click();
+  const emptyError = await mine.page.locator('[aria-invalid="true"]').count();
+  record('Adding nothing: an error under the box', emptyError === 1, `${emptyError} fields marked`);
+  for (const item of ['Warm jacket', 'Power bank', 'Rain cover']) {
+    await mine.page.getByLabel('Add an item').fill(item);
+    await mine.page.getByRole('button', { name: 'Add to the list' }).click();
+    await mine.page.getByRole('list', { name: 'Things to pack' }).getByText(item, { exact: true }).waitFor({ timeout: 15000 });
+  }
+  await mine.page.getByRole('checkbox', { name: /Warm jacket/ }).check();
+  const barText = await mine.page.getByText('1 of 3 packed').waitFor({ timeout: 15000 }).then(() => true, () => false);
+  record('Ticking "Warm jacket" shows "1 of 3 packed"', barText);
+
+  const theirs = await ctx.openPage();
+  await ctx.login(theirs.page, friend);
+  await theirs.page.goto(`${ctx.base}/trips/${webTrip.id}/packing`, { waitUntil: 'networkidle' });
+  const seesTick = await theirs.page.getByRole('checkbox', { name: /Warm jacket/ }).isChecked().catch(() => false);
+  const packedBy = await theirs.page.getByText(/Packed by Ashish Bisht/).count();
+  record("A second account sees the first one's tick after loading the page, and who packed it", seesTick && packedBy === 1, `checked ${seesTick}, ${packedBy} "Packed by"`);
+  await theirs.page.getByRole('checkbox', { name: /Power bank/ }).check();
+  await theirs.page.getByText('2 of 3 packed').waitFor({ timeout: 15000 }).catch(() => {});
+  await mine.page.reload({ waitUntil: 'networkidle' });
+  const bothTicks = (await mine.page.getByRole('checkbox', { checked: true }).count()) === 2;
+  record("...and the first account sees the second's tick after a refresh", bothTicks && (await mine.page.getByText('2 of 3 packed').count()) === 1);
+  await theirs.page.getByRole('button', { name: 'Remove Rain cover' }).click();
+  await theirs.page.getByText('2 of 2 packed').waitFor({ timeout: 15000 }).catch(() => {});
+  record('Removing the last unpacked item: "2 of 2 packed. Everything is packed."', (await theirs.page.getByText(/Everything is packed/).count()) === 1);
+  if (ctx.saveLook) await ctx.shot(theirs.page, 'packing');
+  record('No script errors for the two editors', mine.consoleErrors.length + theirs.consoleErrors.length === 0, [...mine.consoleErrors, ...theirs.consoleErrors].slice(0, 3).join(' | '));
+  await mine.context.close();
+  await theirs.context.close();
+
+  const phone = await ctx.openPage(...ctx.PHONE);
+  await ctx.login(phone.page, watcher);
+  await phone.page.goto(`${ctx.base}/trips/${webTrip.id}/packing`, { waitUntil: 'networkidle' });
+  await phone.page.getByRole('list', { name: 'Things to pack' }).waitFor({ timeout: 15000 }).catch(() => {});
+  const boxes = await phone.page.getByRole('checkbox').count();
+  const enabled = await phone.page.locator('input[type="checkbox"]:not(:disabled)').count();
+  const controls = await phone.page.getByRole('button', { name: /^(Remove|Add to the list)/ }).count();
+  record('A viewer sees the list and the ticks, but every box is locked and there are no add or remove buttons', boxes === 2 && enabled === 0 && controls === 0 && (await phone.page.getByText('You can view this trip').count()) === 1, `${boxes} boxes, ${enabled} unlocked, ${controls} buttons`);
+  const extra = await ctx.overflowOf(phone.page);
+  record(`Phone width (${ctx.PHONE[0]}px), the packing list: no sideways scrolling`, extra <= 0, `${extra}px`);
+  await phone.context.close();
+}
 
 // ====================== Step 7: explore nearby places ======================
 async function exploreChecks(ctx) {
@@ -314,9 +461,19 @@ async function moneyChecks(ctx) {
 
 // Write routes that exist so far, each with a body that would be valid for an owner.
 // Later steps add their own routes to the viewer check in their sections.
-function writeRoutes(tripId, { actId, otherUid, code }) {
+// The bodies of the money and checklist routes are deliberately thin or wrong:
+// a viewer must get 403 BEFORE the body is looked at (token -> member -> role -> body).
+function writeRoutes(tripId, { actId, otherUid, code, itemId }) {
   const t = `/trips/${tripId}`;
+  const anyId = '0123456789abcdef01234567';
   return [
+    ['POST', `${t}/checklist`, { text: 'Viewer item' }],
+    ['PATCH', `${t}/checklist/${itemId}`, { done: true }],
+    ['DELETE', `${t}/checklist/${itemId}`],
+    ['POST', `${t}/expenses`, {}],
+    ['PATCH', `${t}/expenses/${anyId}`, {}],
+    ['DELETE', `${t}/expenses/${anyId}`],
+    ['POST', `${t}/settlements`, {}],
     ['PATCH', t, { name: 'Renamed' }],
     ['DELETE', t],
     ['POST', `${t}/days/1/activities`, { title: 'Viewer stop' }],
@@ -400,7 +557,8 @@ async function membersChecks(ctx) {
 
   // A viewer is refused on every write route
   const stop = await call('POST', `${t}/days/1/activities`, { token: owner.token, body: { title: 'Hadimba Devi Temple' } });
-  const routes = writeRoutes(trip.id, { actId: stop.data?.activity?.id, otherUid: dhruv.uid, code: r2 });
+  const packItem = await call('POST', `${t}/checklist`, { token: owner.token, body: { text: 'Warm jacket' } });
+  const routes = writeRoutes(trip.id, { actId: stop.data?.activity?.id, otherUid: dhruv.uid, code: r2, itemId: packItem.data?.item?.id });
   const viewerResults = [];
   for (const [method, route, body] of routes) {
     const r = await call(method, route, { token: rohan.token, body });
