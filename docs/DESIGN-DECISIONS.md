@@ -231,6 +231,8 @@ Data choices:
 
 ## Change log
 
+- 2026-10-12, Step 9.5: no design change. Fixed one flash on the Money tab: clearing the bill filters no longer shows the "No bills yet" message while the full list loads.
+
 - 2026-10-12, Step 9: Best order board on the Day plan; Category and Involving filters and 20-a-page paging on the bills; bills load separately from settle up and the budget.
 
 - 2026-10-12, Step 8: Packing tab (painted tick boxes, packed strip, who packed what), Packing section on the Overview, `PackedBar`.

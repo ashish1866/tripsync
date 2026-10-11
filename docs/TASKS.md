@@ -46,7 +46,7 @@ Shared list, add, tick, delete, "8 of 12 packed". Editors and owner only for cha
 Best order for a day (nearest-first, Haversine, labelled straight-line). Expense filters by category and person, 20 per page.
 - Done when: unit test for nearest-first passes; filters and paging return the right rows.
 
-## - [ ] Step 9.5: Full test run (all steps at once)
+## - [x] Step 9.5: Full test run (all steps at once)
 First make `npm.cmd run check` use a fixed pool of test accounts: create each once if missing, keep email + random password in a git-ignored file (e.g. `checks/.test-accounts.json`), reuse them every run, and wipe their MongoDB data at the start and end of each run. Only the sign-up test makes one fresh account per run and deletes it. Then run the full check locally, fix every failure (one small commit per fix), and re-run until it passes. If `TOO_MANY_ATTEMPTS_TRY_LATER` appears, do not sleep in a loop: write it under "Blocked" in `docs/PROGRESS.md` and stop.
 - Done when: `npm.cmd test` and the full `npm.cmd run check` pass locally, covering every step's must-fail cases, with no leftover fresh test account.
 
