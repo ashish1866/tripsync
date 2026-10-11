@@ -82,11 +82,39 @@
   border-top: var(--line-thin);
 }
 
-/* The place picked on the list or the map: a cap-yellow band down its edge */
+/* The place picked on the list or the map: a cap-yellow band down its edge.
+   The band is painted down in one stroke when you pick it, so after the list
+   jumps to the row your eye lands on the moving paint. */
 .selected {
+  position: relative;
   background: var(--ground);
-  border-left: 6px solid var(--cap);
-  padding-left: calc(var(--space-4) - 6px);
+}
+
+.selected::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  background: var(--cap);
+  transform-origin: top;
+  pointer-events: none;
+  animation: paint-down var(--t-paint) var(--ease-brush) both;
+}
+
+/* Between rows, the band also covers the thin rule above, as the old border did */
+.place + .selected::after {
+  top: -1px;
+}
+
+@keyframes paint-down {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
 
 .text {
@@ -176,5 +204,12 @@
 
   .row {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Calm version: the band is simply there */
+@media (prefers-reduced-motion: reduce) {
+  .selected::after {
+    animation: none;
   }
 }

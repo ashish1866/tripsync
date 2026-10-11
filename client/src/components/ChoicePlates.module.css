@@ -35,6 +35,8 @@
 }
 
 .face {
+  position: relative;
+  isolation: isolate; /* keeps the yellow paint layer behind the lettering */
   flex: 1;
   display: grid;
   gap: var(--space-1);
@@ -42,6 +44,20 @@
   background: var(--stone);
   border: var(--line);
   border-radius: var(--radius-sm);
+  transition: transform var(--t-release) var(--ease-settle);
+}
+
+/* The yellow of a chosen plate is its own layer, so choosing a plate can
+   paint it on left to right in one stroke. Un-choosing is instant. */
+.face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 1px;
+  background: var(--cap);
+  transform: scaleX(0);
+  transform-origin: left;
 }
 
 .label {
@@ -63,8 +79,19 @@
 }
 
 /* Chosen: painted cap yellow */
-.input:checked + .face {
-  background: var(--cap);
+.input:checked + .face::before {
+  transform: scaleX(1);
+  transition: transform var(--t-paint) var(--ease-brush);
+}
+
+/* Pressed: down 1px at once, like a button */
+.plate:active .face {
+  transform: translateY(1px);
+  transition-duration: var(--t-press);
+}
+
+.set:disabled .plate:active .face {
+  transform: none;
 }
 
 .input:checked + .face .hint {
@@ -142,4 +169,12 @@
 
 .set:disabled .plate:hover .face {
   outline: none;
+}
+
+/* Calm version: the yellow is simply there; the press still shows */
+@media (prefers-reduced-motion: reduce) {
+  .face,
+  .input:checked + .face::before {
+    transition: none;
+  }
 }

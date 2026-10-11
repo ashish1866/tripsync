@@ -74,7 +74,10 @@
   height: 1px;
 }
 
-/* The painted box: a square outlined in ink, filled ink with a stone tick when packed */
+/* The painted box: a square outlined in ink, filled ink with a stone tick when packed.
+   Ticking paints the ink in, base to top, in one stroke, and the tick is
+   stamped on as the stroke finishes. Unticking is instant: the paint is gone.
+   The real checkbox changes at once; only the paint takes its moment. */
 .tick {
   position: relative;
   flex: none;
@@ -84,18 +87,41 @@
   background: var(--stone);
   border: var(--line);
   border-radius: 2px;
+  transition: transform var(--t-release) var(--ease-settle);
 }
 
-.box:checked + .tick {
+.tick::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: var(--ink);
+  transform: scaleY(0);
+  transform-origin: bottom;
 }
 
-.box:checked + .tick::after {
+.tick::after {
   content: '';
   position: absolute;
   inset: 0.3rem;
   background: var(--stone);
   clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0, 43% 62%);
+  opacity: 0;
+}
+
+.box:checked + .tick::before {
+  transform: scaleY(1);
+  transition: transform var(--t-paint) var(--ease-brush);
+}
+
+.box:checked + .tick::after {
+  opacity: 1;
+  transition: opacity var(--t-press) var(--ease-settle) var(--t-paint);
+}
+
+/* Pressed: the box goes down 1px at once, like every plate */
+.row:active .box:not(:disabled) + .tick {
+  transform: translateY(1px);
+  transition-duration: var(--t-press);
 }
 
 /* Hover: the outline gets heavier, like every control */
@@ -182,5 +208,14 @@
 
   .small {
     margin-left: calc(1.75rem + var(--space-3));
+  }
+}
+
+/* Calm version: the ink and the tick are simply there; the press still shows */
+@media (prefers-reduced-motion: reduce) {
+  .tick,
+  .box:checked + .tick::before,
+  .box:checked + .tick::after {
+    transition: none;
   }
 }

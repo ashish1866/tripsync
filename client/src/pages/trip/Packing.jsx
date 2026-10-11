@@ -7,6 +7,7 @@ import Button from '../../components/Button';
 import Notice from '../../components/Notice';
 import PackedBar from '../../components/PackedBar';
 import { canPlan } from '../../utils/roles';
+import { useListShift } from '../../utils/motion';
 import styles from './Packing.module.css';
 
 const MAX_LENGTH = 80;
@@ -28,7 +29,15 @@ export default function Packing() {
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(() => new Set()); // ids being saved
   const [problem, setProblem] = useState(null);
+  const [freshId, setFreshId] = useState(null); // the item just added: wet paint on its row
   const inputRef = useRef(null);
+  // A removed item's neighbours slide up to close the gap (DESIGN-DECISIONS, "Motion").
+  const listRef = useRef(null);
+  useListShift(
+    listRef,
+    items.map((i) => i.id),
+    'packing',
+  );
 
   const mark = (id, on) =>
     setSaving((s) => {
@@ -59,6 +68,7 @@ export default function Packing() {
     try {
       const { data } = await api.post(`/trips/${trip.id}/checklist`, { text: clean });
       setTrip((t) => ({ ...t, checklist: [...t.checklist, data.item] }));
+      setFreshId(data.item.id);
       setText('');
       inputRef.current?.focus();
     } catch (err) {
@@ -118,9 +128,9 @@ export default function Packing() {
             <p>{planner ? 'The list is empty. Add what the group should pack, one item at a time.' : 'The list is empty. The owner or an editor adds items.'}</p>
           </div>
         ) : (
-          <ul className={styles.list} aria-label="Things to pack">
+          <ul ref={listRef} className={styles.list} aria-label="Things to pack">
             {items.map((item) => (
-              <li key={item.id} className={`${styles.item} ${item.done ? styles.done : ''}`}>
+              <li key={item.id} data-shift-id={item.id} className={`${styles.item} ${item.done ? styles.done : ''} ${item.id === freshId ? 'ts-wet' : ''}`}>
                 <label className={styles.row}>
                   <input
                     type="checkbox"

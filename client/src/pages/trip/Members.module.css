@@ -84,6 +84,35 @@
   font-size: var(--text-sm);
 }
 
+/* A role just changed: the ink plate is repainted with its new word, left to
+   right in one stroke, like a sign painter redoing a plate. The stone-coloured
+   word shows as the ink passes under it. At rest it is the plain plate above. */
+.repainted {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+}
+
+.repainted::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--ink);
+  border-radius: var(--radius-sm);
+  transform-origin: left;
+  animation: repaint var(--t-paint) var(--ease-brush) both;
+}
+
+@keyframes repaint {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .since {
   margin: var(--space-1) 0 0;
   font-size: var(--text-sm);
@@ -219,5 +248,12 @@
   .invites,
   .leave {
     padding: var(--space-4);
+  }
+}
+
+/* Calm version: the new plate is simply there */
+@media (prefers-reduced-motion: reduce) {
+  .repainted::before {
+    animation: none;
   }
 }

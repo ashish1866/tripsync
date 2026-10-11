@@ -14,7 +14,7 @@ export default function PackedBar({ packed, total, compact = false }) {
         {all ? '. Everything is packed.' : `. ${total - packed} to go.`}
       </p>
       <div className={styles.track} role="meter" aria-label="Items packed" aria-valuemin={0} aria-valuemax={total} aria-valuenow={packed} aria-valuetext={`${packed} of ${total} packed`}>
-        <span className={styles.fill} style={{ width: `${(packed / total) * 100}%` }} />
+        <span className={styles.fill} style={{ '--share': packed / total }} />
       </div>
     </div>
   );

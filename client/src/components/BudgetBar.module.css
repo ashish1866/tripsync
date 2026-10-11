@@ -35,13 +35,27 @@
   height: 0.6rem;
 }
 
+/* The paint is a full-width strip slid left out of the frame, so its ink edge
+   sits at the share spent. When a bill changes it, the edge slides to the new
+   place; on first view it is simply there. max() keeps the 2px edge showing at
+   zero, as the old width-based strip did. */
 .fill {
   display: block;
+  width: 100%;
   height: 100%;
   background: var(--cap);
   border-right: 2px solid var(--ink);
+  transform: translateX(max(calc((var(--share) - 1) * 100%), calc(2px - 100%)));
+  transition: transform var(--t-shift) var(--ease-settle);
 }
 
 .fillOver {
   background: var(--signal);
+}
+
+/* Calm version: the edge is simply in its new place */
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
 }

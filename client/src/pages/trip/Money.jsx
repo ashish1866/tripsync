@@ -37,6 +37,7 @@ export default function Money() {
   const [paying, setPaying] = useState(null);
   const [payBusy, setPayBusy] = useState(false);
   const [problem, setProblem] = useState(null);
+  const [freshId, setFreshId] = useState(null); // the bill or payment just added: wet paint on its row
 
   const loadSummary = useCallback(async () => {
     try {
@@ -74,6 +75,11 @@ export default function Money() {
     loadBills();
   }, [loadBills]);
 
+  // Another page or filter: the bill just added is no longer news.
+  useEffect(() => {
+    setFreshId(null);
+  }, [page, filters]);
+
   // After any change: the summary, the bills on screen, and the trip (its "spent" line).
   const refresh = useCallback(async () => {
     await Promise.all([loadSummary(), loadBills(), reload()]);
@@ -106,7 +112,8 @@ export default function Money() {
     setPayBusy(true);
     setProblem(null);
     try {
-      await api.post(`/trips/${trip.id}/settlements`, paying);
+      const { data } = await api.post(`/trips/${trip.id}/settlements`, paying);
+      setFreshId(data.settlement?.id ?? null);
       await refresh();
     } catch (err) {
       setProblem(errorMessage(err));
@@ -243,7 +250,8 @@ export default function Money() {
             <ExpenseForm
               trip={trip}
               me={me}
-              onSaved={async () => {
+              onSaved={async (saved) => {
+                setFreshId(saved?.id ?? null);
                 await refresh();
                 setAdding(false);
               }}
@@ -320,7 +328,7 @@ export default function Money() {
                   />
                 </li>
               ) : (
-                <li key={e.id} className={`${styles.entry} ${e.type === 'settlement' ? styles.payment : ''}`}>
+                <li key={e.id} className={`${styles.entry} ${e.type === 'settlement' ? styles.payment : ''} ${e.id === freshId ? 'ts-wet' : ''}`}>
                   <span className={`${styles.swatch} ${styles[e.type === 'settlement' ? 'paid' : ROAD[e.category]]}`} aria-hidden="true" />
                   <div className={styles.entryText}>
                     <h3 className={styles.entryTitle}>{e.type === 'settlement' ? `${nameOf(e.paidBy)} paid ${sentenceName(e.splits[0].uid)}` : e.title}</h3>

@@ -4,17 +4,64 @@
   background: var(--stone);
   color: var(--ink);
   border: var(--line);
-  border-top: 8px solid var(--signal); /* the red band of a warning board */
+  border-top: 8px solid transparent; /* the band is painted over this edge, see ::before */
   border-radius: var(--radius-sm);
+  overflow: visible; /* lets the band sit on the top edge; the question is short and never scrolls */
+}
+
+/* The band of a warning board: red, because this destroys something. It is
+   painted across, left to right, as the board appears, so the colour (the
+   message) is the first thing that moves. At rest it covers the top edge
+   exactly as the old 8px red top border did. */
+.dialog::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -2px;
+  right: -2px;
+  height: 8px;
+  background: var(--signal);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  transform-origin: left;
 }
 
 /* A question that destroys nothing (for example "Mark as paid"): the yellow band */
-.calm {
-  border-top-color: var(--cap);
+.calm::before {
+  background: var(--cap);
+}
+
+.dialog[open] {
+  animation: board-in var(--t-appear) var(--ease-settle) both;
+}
+
+.dialog[open]::before {
+  animation: paint-across var(--t-paint) var(--ease-brush) both;
 }
 
 .dialog::backdrop {
   background: rgb(22 24 27 / 0.6);
+}
+
+.dialog[open]::backdrop {
+  animation: board-in var(--t-appear) var(--ease-settle) both;
+}
+
+@keyframes board-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes paint-across {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .title {
@@ -30,4 +77,13 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   margin-top: var(--space-5);
+}
+
+/* Calm version: the board and its band are simply there. Closing is always instant. */
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open],
+  .dialog[open]::before,
+  .dialog[open]::backdrop {
+    animation: none;
+  }
 }

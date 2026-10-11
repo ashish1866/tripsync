@@ -14,7 +14,7 @@ const MAX_AMOUNT = 1_000_000_000; // paise, Rs 1 crore
 
 // Add a bill, or edit one: what, how much, category, who paid, when, and how
 // it is split (equally among some people, or by exact amounts).
-// onSaved() is called after the server accepts it.
+// onSaved(expense) is called after the server accepts it, with the saved bill.
 export default function ExpenseForm({ trip, me, expense, onSaved, onCancel }) {
   const editing = Boolean(expense);
   const people = trip.members.map((m) => ({ uid: m.uid, name: m.name }));
@@ -79,13 +79,12 @@ export default function ExpenseForm({ trip, me, expense, onSaved, onCancel }) {
     };
     setBusy(true);
     try {
-      if (editing) await api.patch(`/trips/${trip.id}/expenses/${expense.id}`, body);
-      else await api.post(`/trips/${trip.id}/expenses`, body);
+      const { data } = editing ? await api.patch(`/trips/${trip.id}/expenses/${expense.id}`, body) : await api.post(`/trips/${trip.id}/expenses`, body);
       if (!editing) {
         setValues((v) => ({ ...v, title: '', amount: '' }));
         setExact(Object.fromEntries(people.map((p) => [p.uid, ''])));
       }
-      await onSaved();
+      await onSaved(data?.expense);
     } catch (err) {
       setErrors({ form: errorMessage(err) });
     } finally {

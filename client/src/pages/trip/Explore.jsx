@@ -81,7 +81,8 @@ export default function Explore() {
 
   function pick(placeId) {
     setSelected(placeId);
-    // A jump, not a smooth scroll: the only motion in TripSync is the road dash.
+    // A jump, not a smooth scroll: a smooth scroll of unknown length is motion
+    // you wait out. The row's yellow band is painted on instead, to catch the eye.
     rows.current.get(placeId)?.scrollIntoView({ block: 'nearest' });
   }
 

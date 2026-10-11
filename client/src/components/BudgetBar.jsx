@@ -26,7 +26,7 @@ export default function BudgetBar({ spent, budget, compact = false }) {
         aria-valuenow={Math.min(spent, budget)}
         aria-valuetext={`${formatRupees(spent)} of ${formatRupees(budget)}`}
       >
-        <span className={`${styles.fill} ${over ? styles.fillOver : ''}`} style={{ width: `${share * 100}%` }} />
+        <span className={`${styles.fill} ${over ? styles.fillOver : ''}`} style={{ '--share': share }} />
       </div>
     </div>
   );

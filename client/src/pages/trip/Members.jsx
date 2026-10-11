@@ -25,6 +25,7 @@ export default function Members() {
   const [problem, setProblem] = useState(null);
   const [removing, setRemoving] = useState(null); // member being asked about, or "me"
   const [removeBusy, setRemoveBusy] = useState(false);
+  const [repainted, setRepainted] = useState(null); // whose role plate was just repainted
 
   const members = [...trip.members].sort((a, b) => ORDER[a.role] - ORDER[b.role] || a.name.localeCompare(b.name));
 
@@ -35,6 +36,7 @@ export default function Members() {
     try {
       const { data } = await api.patch(`/trips/${trip.id}/members/${member.uid}`, { role });
       setTrip(data.trip);
+      setRepainted(`${member.uid}:${role}`);
     } catch (err) {
       setProblem(errorMessage(err));
     } finally {
@@ -78,7 +80,10 @@ export default function Members() {
                     {me && <span className={styles.you}>You</span>}
                   </p>
                   <p className={styles.role}>
-                    <span className={styles.roleName}>{ROLE_LABEL[m.role]}</span> {ROLE_CAN[m.role]}
+                    <span key={m.role} className={`${styles.roleName} ${repainted === `${m.uid}:${m.role}` ? styles.repainted : ''}`}>
+                      {ROLE_LABEL[m.role]}
+                    </span>{' '}
+                    {ROLE_CAN[m.role]}
                   </p>
                   <p className={styles.since}>Joined {formatDate(m.joinedAt)}</p>
                 </div>
@@ -142,6 +147,7 @@ function Invites({ trip }) {
   const [problem, setProblem] = useState(null);
   const [copied, setCopied] = useState(null);
   const [revoking, setRevoking] = useState(null);
+  const [freshCode, setFreshCode] = useState(null); // the link just made: wet paint on it
 
   const load = useCallback(async () => {
     try {
@@ -162,6 +168,7 @@ function Invites({ trip }) {
     try {
       const { data } = await api.post(`/trips/${trip.id}/invites`, { role });
       setList((l) => ({ state: 'ready', invites: [data.invite, ...l.invites] }));
+      setFreshCode(data.invite.code);
     } catch (err) {
       setProblem(errorMessage(err));
     } finally {
@@ -230,7 +237,7 @@ function Invites({ trip }) {
       {list.state === 'ready' && list.invites.length > 0 && (
         <ul className={styles.inviteList} aria-label="Invite links that still work">
           {list.invites.map((inv) => (
-            <li key={inv.code} className={styles.invite}>
+            <li key={inv.code} className={`${styles.invite} ${inv.code === freshCode ? 'ts-wet' : ''}`}>
               <p className={styles.code}>
                 <span className="visually-hidden">Code </span>
                 {inv.code}
