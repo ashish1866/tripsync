@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '../config/db.js';
 import { HttpError } from '../utils/httpError.js';
 import { equalSplit, formatRs, orderedBalances, settleUp } from '../utils/money.js';
+import { PAGE_SIZE, billFilter, pageWindow } from '../utils/paging.js';
 import { namesFor } from './trips.js';
 
 // EXPENSES (bills), BUDGET and SETTLE UP for one trip.
@@ -43,12 +44,24 @@ function billFrom(req) {
   return { title, amount, category, paidBy, date, splitType: split.type, splits };
 }
 
-// GET /api/trips/:id/expenses (members): newest first, with the names of everyone mentioned.
+// GET /api/trips/:id/expenses?category=&person=&page= (members)
+// Newest first, 20 to a page, with the names of everyone on that page.
+// total: bills that match the filters; allTotal: every bill and payment of the trip.
 export async function listExpenses(req, res) {
-  const rows = await (await expenses()).find({ tripId: req.trip._id }).sort({ date: -1, createdAt: -1 }).limit(500).toArray();
+  const bills = await expenses();
+  const { category, person, page } = req.valid.query;
+  const filter = billFilter(req.trip._id, { category, person });
+  const [total, allTotal] = await Promise.all([bills.countDocuments(filter), bills.countDocuments({ tripId: req.trip._id })]);
+  const window = pageWindow(total, page);
+  const rows = await bills
+    .find(filter)
+    .sort({ date: -1, createdAt: -1, _id: -1 })
+    .skip(window.skip)
+    .limit(window.limit)
+    .toArray();
   const uids = rows.flatMap((e) => [e.paidBy, e.createdBy, ...e.splits.map((s) => s.uid)]);
   const names = await namesFor(await getDb(), uids);
-  res.json({ expenses: rows.map(shape), names: Object.fromEntries(names) });
+  res.json({ expenses: rows.map(shape), names: Object.fromEntries(names), page: window.page, pages: window.pages, pageSize: PAGE_SIZE, total, allTotal });
 }
 
 // POST /api/trips/:id/expenses (owner, editor)

@@ -145,6 +145,10 @@
   margin-bottom: var(--space-3);
 }
 
+.best {
+  margin-bottom: var(--space-5);
+}
+
 .addBoard {
   padding: var(--space-5);
   background: var(--stone);

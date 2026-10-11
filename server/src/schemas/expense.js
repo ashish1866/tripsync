@@ -67,6 +67,20 @@ export const settlementBody = z
   .strictObject({ from: uid, to: uid, amount })
   .refine((s) => s.from !== s.to, 'Someone cannot pay themselves. Pick two different people.');
 
+// GET /trips/:id/expenses?category=food&person=<uid>&page=2
+// category may also be "settlement" (payments marked as paid). person means
+// any bill that person paid or has a share in.
+export const expensesQuery = z.object({
+  category: z.enum([...CATEGORIES, 'settlement'], 'Pick a category from the list.').optional(),
+  person: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/, 'Pick a person from the trip.').optional(),
+  page: z
+    .string()
+    .regex(/^\d{1,4}$/, 'Pick a page number from 1 upwards.')
+    .default('1')
+    .transform(Number)
+    .refine((n) => n >= 1, 'Pick a page number from 1 upwards.'),
+});
+
 export const expenseParams = z.object({
   id: z.string(),
   expenseId: z.string().regex(/^[a-f0-9]{24}$/i, 'This bill does not exist.'),

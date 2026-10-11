@@ -66,6 +66,16 @@ export const dayParams = z.object({
     .refine((n) => n >= 1 && n <= MAX_TRIP_DAYS, 'Pick a day of the trip by its number, for example 2.'),
 });
 
+// PUT /trips/:id/days/:day/order: the stop ids in the order wanted.
+// Any stop not named stays at the end; any id no longer in the day is ignored.
+export const orderBody = z.strictObject({
+  order: z
+    .array(z.string().regex(/^[A-Za-z0-9-]{1,40}$/, 'These are not stop ids.'), 'Send the stops in the order you want.')
+    .min(1, 'Send the stops in the order you want.')
+    .max(MAX_STOPS_PER_DAY, `A day has at most ${MAX_STOPS_PER_DAY} stops.`)
+    .refine((ids) => new Set(ids).size === ids.length, 'Each stop can appear only once.'),
+});
+
 // /trips/:id/activities/:actId (ids are made by newItemId: 16 hex characters)
 export const activityParams = z.object({
   id: z.string(),

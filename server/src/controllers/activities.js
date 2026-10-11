@@ -2,6 +2,7 @@ import { getDb } from '../config/db.js';
 import { HttpError } from '../utils/httpError.js';
 import { newItemId } from '../utils/ids.js';
 import { MAX_STOPS_PER_DAY } from '../schemas/activity.js';
+import { legs, nearestFirst, routeLength } from '../utils/distance.js';
 import { loadTripForMember } from './trips.js';
 
 // STOPS ON A DAY (the brief's "activities"), stored inside the trip:
@@ -142,6 +143,86 @@ export async function editActivity(req, res) {
     }
   }
   res.json({ trip: await loadTripForMember(db, tripId, req.user.uid) });
+}
+
+// A day's stops as the best-order maths wants them.
+async function stopsOfDay(tripId, dayNumber) {
+  const trips = (await getDb()).collection('trips');
+  const current = await trips.findOne({ _id: tripId }, { projection: { days: { $elemMatch: { dayNumber } } } });
+  const day = current?.days?.[0];
+  if (!day) throw new HttpError(404, `This trip has no Day ${dayNumber}.`);
+  return day.activities.map((a) => ({ id: a.id, title: a.title, time: a.time || '', location: a.place?.location ?? null }));
+}
+
+// True when the times written on the stops would run backwards in this order
+// (for example 1:00 pm before 9:00 am). Stops with no time are ignored.
+function timesRunBackwards(stops) {
+  const times = stops.map((s) => s.time).filter(Boolean);
+  return times.some((t, i) => i > 0 && t < times[i - 1]);
+}
+
+// GET /api/trips/:id/days/:day/best-order (any member)
+// Suggests the nearest-first order for the day. It changes nothing.
+export async function bestOrder(req, res) {
+  const stops = await stopsOfDay(req.trip._id, req.valid.params.day);
+  const suggested = nearestFirst(stops);
+  const metres = legs(suggested);
+  res.json({
+    dayNumber: req.valid.params.day,
+    straightLine: true, // distances are straight lines, not road distances
+    placedCount: stops.filter((s) => s.location).length,
+    unplacedCount: stops.filter((s) => !s.location).length,
+    changed: suggested.some((s, i) => s.id !== stops[i].id),
+    currentMetres: routeLength(stops),
+    suggestedMetres: routeLength(suggested),
+    timeClash: timesRunBackwards(suggested),
+    order: suggested.map((s, i) => ({ id: s.id, title: s.title, time: s.time, hasPlace: Boolean(s.location), metresFromPrevious: metres[i] })),
+  });
+}
+
+// PUT /api/trips/:id/days/:day/order (owner, editor): { order: [stopId, ...] }
+// Puts the day's stops in the order given, in ONE update computed inside MongoDB
+// from the day as it is at that moment: a stop added meanwhile stays (at the
+// end), a stop deleted meanwhile is skipped, and no other day or field is touched.
+export async function setOrder(req, res) {
+  const db = await getDb();
+  const dayNumber = req.valid.params.day;
+  const { order } = req.body;
+  const named = { $literal: order };
+  const stopsNow = '$$d.activities';
+  // The stops named, in the order given (a name that no longer matches a stop is dropped)...
+  const inOrder = {
+    $filter: {
+      input: { $map: { input: named, as: 'wanted', in: { $first: { $filter: { input: stopsNow, as: 'a', cond: { $eq: ['$$a.id', '$$wanted'] } } } } } },
+      as: 'found',
+      cond: { $eq: [{ $type: '$$found' }, 'object'] },
+    },
+  };
+  // ...then the stops not named, as they were.
+  const rest = { $filter: { input: stopsNow, as: 'a', cond: { $not: [{ $in: ['$$a.id', named] }] } } };
+
+  const result = await db.collection('trips').updateOne({ _id: req.trip._id, 'days.dayNumber': dayNumber }, [
+    {
+      $set: {
+        updatedAt: '$$NOW',
+        days: {
+          $map: {
+            input: '$days',
+            as: 'd',
+            in: {
+              $cond: [
+                { $eq: ['$$d.dayNumber', { $literal: dayNumber }] },
+                { $mergeObjects: ['$$d', { activities: { $concatArrays: [inOrder, rest] } }] },
+                '$$d',
+              ],
+            },
+          },
+        },
+      },
+    },
+  ]);
+  if (result.matchedCount === 0) throw new HttpError(404, `This trip has no Day ${dayNumber}.`);
+  res.json({ trip: await loadTripForMember(db, req.trip._id, req.user.uid) });
 }
 
 // DELETE /api/trips/:id/activities/:actId (owner, editor)

@@ -9,6 +9,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import Button from '../../components/Button';
 import Notice from '../../components/Notice';
 import RoadLoader from '../../components/RoadLoader';
+import SelectField from '../../components/SelectField';
 import { formatDate, formatRupees, plural } from '../../utils/format';
 import { CATEGORIES, CATEGORY_LABEL } from '../../utils/money';
 import { canPlan } from '../../utils/roles';
@@ -23,7 +24,12 @@ export default function Money() {
   const { profile } = useAuth();
   const me = profile.uid;
   const planner = canPlan(trip.myRole);
+  // Two independent loads, so a problem with one never hides the other:
+  // the summary (settle up + budget) and the list of bills (filtered, 20 to a page).
   const [state, setState] = useState({ status: 'loading' });
+  const [list, setList] = useState({ status: 'loading' });
+  const [filters, setFilters] = useState({ category: '', person: '' });
+  const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -32,27 +38,52 @@ export default function Money() {
   const [payBusy, setPayBusy] = useState(false);
   const [problem, setProblem] = useState(null);
 
-  const load = useCallback(async () => {
+  const loadSummary = useCallback(async () => {
     try {
-      const [bills, budget, settle] = await Promise.all([
-        api.get(`/trips/${trip.id}/expenses`),
-        api.get(`/trips/${trip.id}/budget`),
-        api.get(`/trips/${trip.id}/settlements`),
-      ]);
-      setState({ status: 'ready', bills: bills.data, budget: budget.data, settle: settle.data });
+      const [budget, settle] = await Promise.all([api.get(`/trips/${trip.id}/budget`), api.get(`/trips/${trip.id}/settlements`)]);
+      setState({ status: 'ready', budget: budget.data, settle: settle.data });
     } catch (err) {
       setState({ status: 'error', message: errorMessage(err) });
     }
   }, [trip.id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const loadBills = useCallback(async () => {
+    // Keep the bills already on screen while the next page or filter loads.
+    setList((l) => (l.status === 'ready' ? { ...l, refreshing: true } : { status: 'loading' }));
+    try {
+      const params = { page };
+      if (filters.category) params.category = filters.category;
+      if (filters.person) params.person = filters.person;
+      const { data } = await api.get(`/trips/${trip.id}/expenses`, { params });
+      // The last bill on a page was deleted: step back to the last page that still exists.
+      if (data.page > data.pages) setPage(data.pages);
+      else setList({ status: 'ready', data });
+    } catch (err) {
+      setList({ status: 'error', message: errorMessage(err) });
+    }
+  }, [trip.id, page, filters]);
 
-  // After any change: this page's numbers, and the trip (its "spent" line).
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
+
+  useEffect(() => {
+    loadBills();
+  }, [loadBills]);
+
+  // After any change: the summary, the bills on screen, and the trip (its "spent" line).
   const refresh = useCallback(async () => {
-    await Promise.all([load(), reload()]);
-  }, [load, reload]);
+    await Promise.all([loadSummary(), loadBills(), reload()]);
+  }, [loadSummary, loadBills, reload]);
+
+  const changeFilter = (field) => (event) => {
+    setFilters((f) => ({ ...f, [field]: event.target.value }));
+    setPage(1);
+  };
+  const clearFilters = () => {
+    setFilters({ category: '', person: '' });
+    setPage(1);
+  };
 
   async function confirmDelete() {
     setDeleteBusy(true);
@@ -82,38 +113,47 @@ export default function Money() {
     }
   }
 
-  if (state.status === 'loading') return <RoadLoader label="Adding up the bills" />;
-  if (state.status === 'error') {
-    return (
-      <div className={styles.problem}>
-        <Notice tone="warning" title="The money could not be loaded">
-          <p>{state.message}</p>
-        </Notice>
-        <Button variant="plain" onClick={load}>
-          Try loading it again
-        </Button>
-      </div>
-    );
-  }
-
-  const { bills, budget, settle } = state;
-  const names = { ...bills.names, ...Object.fromEntries(settle.people.map((p) => [p.uid, p.name])) };
+  const summaryReady = state.status === 'ready';
+  const { budget, settle } = state;
+  const bills = list.status === 'ready' ? list.data : null;
+  // Names: the trip's own members first, then anyone only the bills or the balances know.
+  const names = {
+    ...Object.fromEntries(trip.members.map((m) => [m.uid, m.name])),
+    ...(bills?.names ?? {}),
+    ...Object.fromEntries((settle?.people ?? []).map((p) => [p.uid, p.name])),
+  };
   const nameOf = (uid) => (uid === me ? 'You' : names[uid] || 'A former member');
   const sentenceName = (uid) => (uid === me ? 'you' : names[uid] || 'a former member');
-  const expenses = bills.expenses;
+  const expenses = bills?.expenses ?? [];
+  const everyBill = bills?.allTotal ?? null; // every bill and payment of the trip, whatever the filters
   const canChange = (e) => trip.myRole === 'owner' || (trip.myRole === 'editor' && e.createdBy === me);
+  const filtered = Boolean(filters.category || filters.person);
+  const anyBills = bills ? bills.allTotal > 0 : Boolean(budget?.byCategory.length);
 
   return (
     <div className={styles.page}>
       {problem && <Notice tone="warning">{problem}</Notice>}
 
       <div className={styles.top}>
+        {state.status === 'loading' && <RoadLoader label="Adding up the bills" />}
+        {state.status === 'error' && (
+          <div className={styles.problem}>
+            <Notice tone="warning" title="Settle up and the budget could not be loaded">
+              <p>{state.message} The bills below may still load.</p>
+            </Notice>
+            <Button variant="plain" onClick={loadSummary}>
+              Try loading them again
+            </Button>
+          </div>
+        )}
+        {summaryReady && (
+          <>
         <section className={styles.settle} aria-labelledby="settle-title">
           <h2 id="settle-title" className={styles.heading}>
             Settle up
           </h2>
           {settle.transfers.length === 0 ? (
-            <p className={styles.even}>{expenses.length ? 'Everyone is square. Nobody owes anybody.' : 'Nothing to settle yet. Add the first bill and this shows who pays whom.'}</p>
+            <p className={styles.even}>{anyBills ? 'Everyone is square. Nobody owes anybody.' : 'Nothing to settle yet. Add the first bill and this shows who pays whom.'}</p>
           ) : (
             <>
               <p className={styles.lead}>The shortest list of payments that squares everyone up.</p>
@@ -180,12 +220,14 @@ export default function Money() {
             <p className={styles.note}>No bills yet, so nothing is spent.</p>
           )}
         </section>
+          </>
+        )}
       </div>
 
       <section className={styles.bills} aria-labelledby="bills-title">
         <div className={styles.billsHead}>
           <h2 id="bills-title" className={styles.heading}>
-            Bills, {plural(expenses.filter((e) => e.type === 'expense').length, 'bill')}
+            Bills and payments{bills ? `, ${filtered ? `${bills.total} of ${bills.allTotal}` : bills.allTotal}` : ''}
           </h2>
           {planner && !adding && <Button onClick={() => setAdding(true)}>Add a bill</Button>}
         </div>
@@ -207,13 +249,56 @@ export default function Money() {
 
         {!planner && <p className={styles.viewer}>You can view this trip. Only the owner and editors add bills or mark payments.</p>}
 
-        {expenses.length === 0 ? (
+        {(filtered || (bills && bills.allTotal > 0)) && (
+          <div className={styles.filters} role="group" aria-label="Filter the bills">
+            <SelectField
+              label="Category"
+              value={filters.category}
+              onChange={changeFilter('category')}
+              options={[{ value: '', label: 'All categories' }, ...CATEGORIES.map((c) => ({ value: c.value, label: c.label })), { value: 'settlement', label: 'Payments marked as paid' }]}
+            />
+            <SelectField
+              label="Involving"
+              value={filters.person}
+              onChange={changeFilter('person')}
+              options={[{ value: '', label: 'Everyone' }, ...trip.members.map((m) => ({ value: m.uid, label: m.uid === me ? `${m.name} (you)` : m.name }))]}
+            />
+            {filtered && (
+              <Button variant="plain" className={styles.clear} onClick={clearFilters}>
+                Clear the filters
+              </Button>
+            )}
+          </div>
+        )}
+
+        {list.status === 'loading' && <RoadLoader label="Loading the bills" />}
+
+        {list.status === 'error' && (
+          <div className={styles.problem}>
+            <Notice tone="warning" title="The bills could not be loaded">
+              <p>{list.message} Settle up and the budget above do not depend on this list.</p>
+            </Notice>
+            <Button variant="plain" onClick={loadBills}>
+              Try loading the bills again
+            </Button>
+          </div>
+        )}
+
+        {list.status === 'ready' && expenses.length === 0 && (
           <div className={styles.empty}>
             <span className={styles.emptySlip} aria-hidden="true" />
-            <p>No bills yet. The first one usually is the stay or the bus tickets.</p>
+            {filtered ? (
+              <p>
+                No bills match these filters. <button type="button" className={styles.linkButton} onClick={clearFilters}>Show every bill again</button>
+              </p>
+            ) : (
+              <p>No bills yet. The first one usually is the stay or the bus tickets.</p>
+            )}
           </div>
-        ) : (
-          <ul className={styles.ledger} aria-label="All bills and payments">
+        )}
+
+        {list.status === 'ready' && expenses.length > 0 && (
+          <ul className={styles.ledger} aria-label="All bills and payments" aria-busy={Boolean(list.refreshing)}>
             {expenses.map((e) =>
               editingId === e.id ? (
                 <li key={e.id} className={styles.editRow}>
@@ -262,6 +347,20 @@ export default function Money() {
               ),
             )}
           </ul>
+        )}
+
+        {list.status === 'ready' && bills.pages > 1 && (
+          <nav className={styles.pager} aria-label="Pages of bills">
+            <Button variant="plain" className={styles.small} disabled={bills.page <= 1} onClick={() => setPage(bills.page - 1)}>
+              Previous page
+            </Button>
+            <p className={styles.pageNote}>
+              Page {bills.page} of {bills.pages}. Showing {(bills.page - 1) * bills.pageSize + 1} to {(bills.page - 1) * bills.pageSize + expenses.length} of {bills.total}.
+            </p>
+            <Button variant="plain" className={styles.small} disabled={bills.page >= bills.pages} onClick={() => setPage(bills.page + 1)}>
+              Next page
+            </Button>
+          </nav>
         )}
       </section>
 

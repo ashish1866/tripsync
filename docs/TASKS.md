@@ -42,7 +42,7 @@ Cafes, attractions, hotels, restaurants via Geoapify, `places` cache first. List
 Shared list, add, tick, delete, "8 of 12 packed". Editors and owner only for changes.
 - Done when: two accounts see each other's ticks after a refresh; a viewer ticking gets 403.
 
-## - [ ] Step 9: Extras
+## - [x] Step 9: Extras
 Best order for a day (nearest-first, Haversine, labelled straight-line). Expense filters by category and person, 20 per page.
 - Done when: unit test for nearest-first passes; filters and paging return the right rows.
 

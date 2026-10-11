@@ -31,7 +31,242 @@ export async function addMember(ctx, tripId, user, role) {
   await ctx.db.collection('trips').updateOne({ _id: new ObjectId(tripId) }, { $push: { members: { uid: user.uid, role, joinedAt: new Date() } } });
 }
 
-const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks, exploreChecks, packingChecks];
+const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks, exploreChecks, packingChecks, extrasChecks];
+
+// ====================== Step 9: best order, bill filters and paging ======================
+async function extrasChecks(ctx) {
+  const { call, record, hasError, db } = ctx;
+  ctx.setSection('Best order API');
+
+  const owner = await ctx.newUser('yowner', 'Ashish Check');
+  const editor = await ctx.newUser('yeditor', 'Dhruv Check');
+  const viewer = await ctx.newUser('yviewer', 'Rohan Check');
+  const stranger = await ctx.newUser('ystranger', 'Ankit Check');
+  const trip = await makeTrip(ctx, owner);
+  await addMember(ctx, trip.id, editor, 'editor');
+  await addMember(ctx, trip.id, viewer, 'viewer');
+  const t = `/trips/${trip.id}`;
+
+  // Real places around Manali, added in a deliberately wasteful order
+  const spot = (name, lng, lat) => ({ name, address: 'Manali, Himachal Pradesh', location: [lng, lat], placeId: `check-${name.replace(/\W/g, '')}` });
+  const MALL = spot('Mall Road', 77.1892, 32.2432);
+  const SOLANG = spot('Solang Valley', 77.1566, 32.3161);
+  const HADIMBA = spot('Hadimba Temple', 77.1808, 32.2484);
+  const OLD = spot('Old Manali', 77.1761, 32.2571);
+  const add = async (day, title, place, time = '', token = owner.token) => (await call('POST', `${t}/days/${day}/activities`, { token, body: { title, place, time } })).data?.activity;
+  const mall = await add(1, 'Mall Road', MALL);
+  const solang = await add(1, 'Solang Valley', SOLANG);
+  const hadimba = await add(1, 'Hadimba Temple', HADIMBA);
+  const old = await add(1, 'Old Manali', OLD);
+  const dayOne = async () => (await call('GET', t, { token: owner.token })).data.trip.days[0].activities;
+  const titles = (list) => list.map((a) => a.title).join(' > ');
+  const beforeOrder = titles(await dayOne());
+
+  const asked = await call('GET', `${t}/days/1/best-order`, { token: viewer.token });
+  const sug = asked.data;
+  record('A viewer asks for the best order of Day 1: 200', asked.status === 200, `HTTP ${asked.status} ${asked.data?.error ?? ''}`);
+  record('Nearest-first from Mall Road: Hadimba, then Old Manali, then Solang Valley', titles(sug?.order || []) === 'Mall Road > Hadimba Temple > Old Manali > Solang Valley', titles(sug?.order || []));
+  record('It says the distances are straight lines, and the new route is shorter than the old one', sug?.straightLine === true && sug.changed === true && sug.suggestedMetres < sug.currentMetres && sug.order[0].metresFromPrevious === null, `now ${sug?.currentMetres} m, suggested ${sug?.suggestedMetres} m`);
+  record('Asking changes nothing: the day is still in the order it was', titles(await dayOne()) === beforeOrder, titles(await dayOne()));
+  const missing = await call('GET', `${t}/days/9/best-order`, { token: owner.token });
+  const garbled = await call('GET', `${t}/days/two/best-order`, { token: owner.token });
+  const outsider = await call('GET', `${t}/days/1/best-order`, { token: stranger.token });
+  record('A day the trip does not have: 404; day "two": 400; a stranger: 403', missing.status === 404 && garbled.status === 400 && outsider.status === 403, `${missing.status}/${garbled.status}/${outsider.status}`);
+
+  // Applying it
+  const ids = (sug?.order || []).map((s) => s.id);
+  const viewerPut = await call('PUT', `${t}/days/1/order`, { token: viewer.token, body: { order: ids } });
+  const strangerPut = await call('PUT', `${t}/days/1/order`, { token: stranger.token, body: { order: ids } });
+  const noTokenPut = await call('PUT', `${t}/days/1/order`, { body: { order: ids } });
+  record('A viewer applying an order: 403; a stranger: 403; no login: 401', viewerPut.status === 403 && hasError(viewerPut) && strangerPut.status === 403 && noTokenPut.status === 401, `${viewerPut.status}/${strangerPut.status}/${noTokenPut.status}`);
+  record('...and the day is still unchanged', titles(await dayOne()) === beforeOrder);
+  const badOrders = [
+    ['an empty list', { order: [] }],
+    ['the same stop twice', { order: [ids[0], ids[0]] }],
+    ['something that is not a list', { order: 'Hadimba' }],
+    ['ids with odd characters', { order: ['../x'] }],
+    ['an extra field', { order: ids, day: 2 }],
+  ];
+  for (const [label, body] of badOrders) {
+    const r = await call('PUT', `${t}/days/1/order`, { token: editor.token, body });
+    record(`Applying an order with ${label}: 400`, r.status === 400 && hasError(r), `HTTP ${r.status} ${r.data?.error ?? ''}`);
+  }
+  const applied = await call('PUT', `${t}/days/1/order`, { token: editor.token, body: { order: ids } });
+  const afterList = applied.data?.trip?.days?.[0]?.activities || [];
+  const intact = afterList.every((a) => a.place && a.addedBy === owner.uid && a.id);
+  record('An editor applies it: 200, the day is now nearest-first, every stop keeps its place and author', applied.status === 200 && titles(afterList) === 'Mall Road > Hadimba Temple > Old Manali > Solang Valley' && intact, `HTTP ${applied.status} ${titles(afterList)}`);
+  const again = await call('GET', `${t}/days/1/best-order`, { token: owner.token });
+  record('Asking again says it is already the nearest-first order (changed: false)', again.data?.changed === false, JSON.stringify(again.data?.changed));
+  const otherDay = (await call('GET', t, { token: owner.token })).data.trip.days.slice(1).every((d) => d.activities.length === 0);
+  record('No other day was touched', otherDay);
+
+  // Safe edits: the day changed between asking and applying
+  const late = await add(1, 'Late addition', MALL);
+  const putStale = await call('PUT', `${t}/days/1/order`, { token: owner.token, body: { order: [...ids].reverse().concat(['0000000000000000']) } });
+  const staleList = putStale.data?.trip?.days?.[0]?.activities || [];
+  record('A stop added after asking stays, at the end; an id that is not in the day is ignored', putStale.status === 200 && titles(staleList) === 'Solang Valley > Old Manali > Hadimba Temple > Mall Road > Late addition', `HTTP ${putStale.status} ${titles(staleList)}`);
+  await call('DELETE', `${t}/activities/${late.id}`, { token: owner.token });
+  const droppedId = old.id;
+  await call('DELETE', `${t}/activities/${droppedId}`, { token: owner.token });
+  const putWithGone = await call('PUT', `${t}/days/1/order`, { token: owner.token, body: { order: ids } });
+  record('A stop deleted after asking is skipped, the rest follow the order', putWithGone.status === 200 && titles(putWithGone.data.trip.days[0].activities) === 'Mall Road > Hadimba Temple > Solang Valley', titles(putWithGone.data?.trip?.days?.[0]?.activities || []));
+
+  // Stops with no place, and times that would run backwards
+  const noPlace = await add(2, 'Lunch somewhere', null);
+  await add(2, 'Far stop', SOLANG, '09:00');
+  await add(2, 'Near stop', HADIMBA, '10:00');
+  await add(2, 'Start', MALL, '13:00');
+  const day2 = await call('GET', `${t}/days/2/best-order`, { token: owner.token });
+  record('A stop with no map point goes last, and the answer counts placed and unplaced stops', day2.data?.order?.at(-1)?.id === noPlace?.id && day2.data.placedCount === 3 && day2.data.unplacedCount === 1 && day2.data.order.at(-1).metresFromPrevious === null, titles(day2.data?.order || []));
+  record('If the new order puts a later time before an earlier one, it says so (timeClash)', day2.data?.timeClash === true && day2.data.changed === true, `timeClash ${day2.data?.timeClash}`);
+  const day3 = await call('GET', `${t}/days/3/best-order`, { token: owner.token });
+  await add(3, 'Only one', MALL);
+  const day3b = await call('GET', `${t}/days/3/best-order`, { token: owner.token });
+  record('A day with fewer than two placed stops has nothing to order', day3.data?.placedCount === 0 && day3b.data?.placedCount === 1 && day3b.data.changed === false, `${day3.data?.placedCount}/${day3b.data?.placedCount}`);
+
+  // ---------- bill filters and paging ----------
+  ctx.setSection('Bill filters and paging');
+  const ra = await ctx.newUser('yra', 'Ashish Check');
+  const rb = await ctx.newUser('yrb', 'Rahul Check');
+  const rc = await ctx.newUser('yrc', 'Ankit Check');
+  const bigTrip = await makeTrip(ctx, ra, { name: 'Manali with everyone', days: 5 });
+  await addMember(ctx, bigTrip.id, rb, 'editor');
+  await addMember(ctx, bigTrip.id, rc, 'viewer');
+  const bt = `/trips/${bigTrip.id}`;
+  const cats = ['stay', 'travel', 'food', 'activities', 'shopping', 'other'];
+  const people = [ra, rb, rc];
+  const base = Date.now();
+  const rows = [];
+  for (let i = 0; i < 45; i++) {
+    const among = i % 2 === 0 ? [ra, rb] : [rb, rc];
+    rows.push({
+      tripId: new ObjectId(bigTrip.id), title: `Bill ${String(i + 1).padStart(2, '0')}`, amount: 100000 + i * 100, category: cats[i % 6], paidBy: people[i % 3].uid,
+      date: dayFromToday(-i), type: 'expense', splitType: 'equal', splits: among.map((p) => ({ uid: p.uid, share: (100000 + i * 100) / 2 })),
+      createdBy: ra.uid, createdAt: new Date(base + i * 1000), updatedAt: new Date(base + i * 1000),
+    });
+  }
+  for (let i = 0; i < 2; i++) {
+    rows.push({
+      tripId: new ObjectId(bigTrip.id), title: `Payment ${i + 1}`, amount: 50000, category: 'settlement', paidBy: rc.uid, date: dayFromToday(5), type: 'settlement', splitType: 'exact',
+      splits: [{ uid: ra.uid, share: 50000 }], createdBy: rc.uid, createdAt: new Date(base + 100000 + i * 1000), updatedAt: new Date(base + 100000 + i * 1000),
+    });
+  }
+  await db.collection('expenses').insertMany(rows);
+  // What the server should answer, worked out here without its code: newest date first, then newest created.
+  const newestFirst = (a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1);
+  const expectIds = (rule) => rows.filter(rule).sort(newestFirst).map((r) => r.title);
+  const ask = async (query, user = ra) => (await call('GET', `${bt}/expenses${query}`, { token: user.token }));
+  const got = (r) => (r.data?.expenses || []).map((e) => e.title);
+
+  const p1 = await ask('');
+  const p2 = await ask('?page=2');
+  const p3 = await ask('?page=3');
+  const p4 = await ask('?page=4');
+  record('47 bills and payments: page 1 has 20, page 2 has 20, page 3 has 7', got(p1).length === 20 && got(p2).length === 20 && got(p3).length === 7, `${got(p1).length}/${got(p2).length}/${got(p3).length}`);
+  record('The answer says page, pages (3), page size (20), total (47)', p1.data.page === 1 && p1.data.pages === 3 && p1.data.pageSize === 20 && p1.data.total === 47 && p1.data.allTotal === 47, JSON.stringify({ page: p1.data?.page, pages: p1.data?.pages, total: p1.data?.total }));
+  record('The three pages together are every row once, newest first', JSON.stringify([...got(p1), ...got(p2), ...got(p3)]) === JSON.stringify(expectIds(() => true)), 'order or rows differ');
+  record('A page past the end: 200 with no rows, and it still says there are 3 pages', p4.status === 200 && got(p4).length === 0 && p4.data.pages === 3, `HTTP ${p4.status} ${got(p4).length} rows`);
+
+  const food = await ask('?category=food');
+  record('Category food: exactly the food bills, with the matching total', JSON.stringify(got(food)) === JSON.stringify(expectIds((r) => r.category === 'food')) && food.data.total === rows.filter((r) => r.category === 'food').length && food.data.allTotal === 47, `${got(food).length} rows, total ${food.data?.total}`);
+  const pays = await ask('?category=settlement');
+  record('Category settlement: only the 2 payments marked as paid', JSON.stringify(got(pays)) === JSON.stringify(expectIds((r) => r.category === 'settlement')) && pays.data.total === 2, got(pays).join(', '));
+  const mine = (uid) => (r) => r.paidBy === uid || r.splits.some((s) => s.uid === uid);
+  const rahulAll = await ask(`?person=${rb.uid}`);
+  const rahulP2 = await ask(`?person=${rb.uid}&page=2`);
+  record('Person Rahul: every bill he paid or has a share in (all but none of the others), paged', rahulAll.data.total === rows.filter(mine(rb.uid)).length && JSON.stringify([...got(rahulAll), ...got(rahulP2)].slice(0, rahulAll.data.total)) === JSON.stringify(expectIds(mine(rb.uid))), `${rahulAll.data?.total} of 47`);
+  const ankitAll = await ask(`?person=${rc.uid}`);
+  record('Person Ankit: only bills he paid or shares, so fewer rows than Rahul', ankitAll.data.total === rows.filter(mine(rc.uid)).length && ankitAll.data.total < rahulAll.data.total, `${ankitAll.data?.total}`);
+  const both = await ask(`?category=travel&person=${rb.uid}`);
+  record('Category and person together: the rows that are both', JSON.stringify(got(both)) === JSON.stringify(expectIds((r) => r.category === 'travel' && mine(rb.uid)(r))), `${got(both).length} rows`);
+  const none = await ask(`?category=settlement&person=${rb.uid}`);
+  record('A filter nothing matches: 200, no rows, total 0, pages 1', none.status === 200 && got(none).length === 0 && none.data.total === 0 && none.data.pages === 1 && none.data.allTotal === 47, `HTTP ${none.status} total ${none.data?.total}`);
+
+  for (const [label, query] of [['an unknown category', '?category=petrol'], ['page 0', '?page=0'], ['page "abc"', '?page=abc'], ['a 5-digit page', '?page=12345'], ['a person with spaces', '?person=a%20b']]) {
+    const r = await ask(query);
+    record(`Bills with ${label}: 400`, r.status === 400 && hasError(r), `HTTP ${r.status} ${r.data?.error ?? ''}`);
+  }
+  const injected = await ask('?person[$ne]=x');
+  record('A MongoDB-looking query value is ignored, never run (returns all 47)', injected.status === 200 && injected.data.total === 47, `HTTP ${injected.status} total ${injected.data?.total}`);
+  const viewerSees = await ask('', rc);
+  const outsiderAsks = await ask('', stranger);
+  record('A viewer reads the bills (200); a stranger cannot (403)', viewerSees.status === 200 && outsiderAsks.status === 403, `${viewerSees.status}/${outsiderAsks.status}`);
+
+  // ---------- in the browser ----------
+  ctx.setSection('Extras in the browser');
+  const { context, page, consoleErrors } = await ctx.openPage();
+  await ctx.login(page, ra);
+  await page.goto(`${ctx.base}/trips/${bigTrip.id}/money`, { waitUntil: 'networkidle' });
+  const ledger = page.getByRole('list', { name: 'All bills and payments' });
+  await ledger.waitFor({ timeout: 20000 }).catch(() => {});
+  const firstPage = await ledger.getByRole('listitem').count();
+  const pager = (await page.getByRole('navigation', { name: 'Pages of bills' }).innerText().catch(() => '')).replace(/\s+/g, ' ');
+  record('The money screen shows 20 bills, "Page 1 of 3. Showing 1 to 20 of 47."', firstPage === 20 && /Page 1 of 3\. Showing 1 to 20 of 47\./.test(pager) && (await page.getByRole('heading', { name: 'Bills and payments, 47' }).count()) === 1, `${firstPage} rows, "${pager}"`);
+  record('"Previous page" is locked on page 1', await page.getByRole('button', { name: 'Previous page' }).isDisabled());
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await page.getByText(/Page 2 of 3/).waitFor({ timeout: 15000 }).catch(() => {});
+  const second = (await page.getByRole('navigation', { name: 'Pages of bills' }).innerText().catch(() => '')).replace(/\s+/g, ' ');
+  record('Next page: "Page 2 of 3. Showing 21 to 40 of 47."', /Page 2 of 3\. Showing 21 to 40 of 47\./.test(second), second);
+  await page.getByRole('group', { name: 'Filter the bills' }).getByLabel('Category').selectOption('food');
+  await page.getByRole('heading', { name: new RegExp(`Bills and payments, ${rows.filter((r) => r.category === 'food').length} of 47`) }).waitFor({ timeout: 15000 }).catch(() => {});
+  const foodRows = await ledger.getByRole('listitem').count();
+  const foodHead = (await page.locator('#bills-title').innerText()).replace(/\s+/g, ' ');
+  record('Choosing Food goes back to page 1 and shows only food bills ("8 of 47"), with no pager', foodRows === rows.filter((r) => r.category === 'food').length && /of 47/.test(foodHead) && (await page.getByRole('navigation', { name: 'Pages of bills' }).count()) === 0, `${foodRows} rows, "${foodHead}"`);
+  await page.getByRole('group', { name: 'Filter the bills' }).getByLabel('Involving').selectOption(rc.uid);
+  await page.waitForTimeout(800);
+  const involving = await ledger.getByRole('listitem').count();
+  record('Food and Ankit together narrows it further', involving === rows.filter((r) => r.category === 'food' && mine(rc.uid)(r)).length, `${involving} rows`);
+  await page.getByRole('group', { name: 'Filter the bills' }).getByLabel('Category').selectOption('settlement');
+  await page.getByRole('group', { name: 'Filter the bills' }).getByLabel('Involving').selectOption(rb.uid);
+  const empty = await page.getByText('No bills match these filters.').waitFor({ timeout: 15000 }).then(() => true, () => false);
+  record('A filter nothing matches says so and offers a way back', empty && (await page.getByRole('button', { name: 'Show every bill again' }).count()) === 1);
+  await page.getByRole('button', { name: 'Clear the filters' }).click();
+  await page.getByRole('heading', { name: 'Bills and payments, 47' }).waitFor({ timeout: 15000 }).catch(() => {});
+  record('Clearing the filters brings back all 47', (await ledger.getByRole('listitem').count()) === 20);
+  if (ctx.saveLook) await ctx.shot(page, 'money-filters');
+
+  // Best order in the browser (its own page: the one above is logged in as someone else)
+  record('No script errors on the money screen', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+  await context.close();
+  const walker = await ctx.newUser('ywalk', 'Dhruv Check');
+  const walkTrip = await makeTrip(ctx, walker);
+  const wt = `/trips/${walkTrip.id}`;
+  for (const [title, place] of [['Mall Road', MALL], ['Solang Valley', SOLANG], ['Hadimba Temple', HADIMBA]]) await call('POST', `${wt}/days/1/activities`, { token: walker.token, body: { title, place } });
+  const walk = await ctx.openPage();
+  const wp = walk.page;
+  await ctx.login(wp, walker);
+  await wp.goto(`${ctx.base}/trips/${walkTrip.id}/plan?day=1`, { waitUntil: 'networkidle' });
+  await wp.getByRole('button', { name: 'Suggest the nearest-first order' }).click();
+  const orderList = wp.getByRole('list', { name: 'Nearest-first order' });
+  const shown = await orderList.waitFor({ timeout: 15000 }).then(() => orderList.innerText(), () => '');
+  record('The Day plan suggests Mall Road, Hadimba Temple, Solang Valley, with the straight-line warning', /Mall Road[\s\S]*Hadimba Temple[\s\S]*Solang Valley/.test(shown) && (await wp.getByText(/straight lines, not road distances/).count()) === 1, shown.replace(/\s+/g, ' ').slice(0, 200));
+  if (ctx.saveLook) await ctx.shot(wp, 'best-order');
+  await wp.getByRole('button', { name: 'Keep my order' }).click();
+  const unchanged = (await wp.getByRole('list', { name: 'Stops on Day 1' }).innerText()).replace(/\s+/g, ' ');
+  record('"Keep my order" changes nothing', /Mall Road[\s\S]*Solang Valley[\s\S]*Hadimba Temple/.test(unchanged), unchanged.slice(0, 160));
+  await wp.getByRole('button', { name: 'Suggest the nearest-first order' }).click();
+  await wp.getByRole('button', { name: 'Use this order' }).click();
+  await wp.getByRole('button', { name: 'Suggest the nearest-first order' }).waitFor({ timeout: 15000 }).catch(() => {});
+  const reordered = (await wp.getByRole('list', { name: 'Stops on Day 1' }).innerText()).replace(/\s+/g, ' ');
+  record('"Use this order" puts the stops in that order on the Day plan', /Mall Road[\s\S]*Hadimba Temple[\s\S]*Solang Valley/.test(reordered), reordered.slice(0, 160));
+  record('No script errors on the day plan', walk.consoleErrors.length === 0, walk.consoleErrors.slice(0, 3).join(' | '));
+  await walk.context.close();
+
+  const watcher = await ctx.openPage(...ctx.PHONE);
+  await ctx.login(watcher.page, viewer);
+  await watcher.page.goto(`${ctx.base}/trips/${trip.id}/plan?day=1`, { waitUntil: 'networkidle' });
+  await watcher.page.getByRole('list', { name: 'Stops on Day 1' }).waitFor({ timeout: 15000 }).catch(() => {});
+  record('A viewer sees no "Best order" board on the Day plan', (await watcher.page.getByRole('button', { name: 'Suggest the nearest-first order' }).count()) === 0);
+  await watcher.context.close();
+
+  const phone = await ctx.openPage(...ctx.PHONE);
+  await ctx.login(phone.page, ra);
+  await phone.page.goto(`${ctx.base}/trips/${bigTrip.id}/money`, { waitUntil: 'networkidle' });
+  await phone.page.getByRole('navigation', { name: 'Pages of bills' }).waitFor({ timeout: 15000 }).catch(() => {});
+  const extra = await ctx.overflowOf(phone.page);
+  record(`Phone width (${ctx.PHONE[0]}px), money with filters and pages: no sideways scrolling`, extra <= 0, `${extra}px`);
+  await phone.context.close();
+}
 
 // ====================== Step 8: packing checklist ======================
 async function packingChecks(ctx) {

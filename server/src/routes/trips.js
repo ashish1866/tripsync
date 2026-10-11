@@ -3,14 +3,14 @@ import { requireMember, requireRole } from '../middleware/tripAccess.js';
 import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { rateLimit, LIMITS } from '../middleware/rateLimit.js';
 import { createTripBody, updateTripBody } from '../schemas/trip.js';
-import { activityParams, dayParams, editActivityBody, newActivityBody } from '../schemas/activity.js';
+import { activityParams, dayParams, editActivityBody, newActivityBody, orderBody } from '../schemas/activity.js';
 import { inviteBody, inviteParams, memberParams, roleBody } from '../schemas/member.js';
 import { listTrips, createTrip, getTrip, updateTrip, deleteTrip } from '../controllers/trips.js';
-import { addActivity, editActivity, deleteActivity } from '../controllers/activities.js';
+import { addActivity, bestOrder, editActivity, deleteActivity, setOrder } from '../controllers/activities.js';
 import { createInvite, listInvites, revokeInvite } from '../controllers/invites.js';
 import { changeRole, ownerOrSelf, removeMember } from '../controllers/members.js';
 import { addExpense, budget, deleteExpense, editExpense, listExpenses, markPaid, ownBillOrOwner, settlements } from '../controllers/expenses.js';
-import { expenseBody, expenseParams, settlementBody } from '../schemas/expense.js';
+import { expenseBody, expenseParams, expensesQuery, settlementBody } from '../schemas/expense.js';
 import { itemParams, newItemBody, tickBody } from '../schemas/checklist.js';
 import { addItem, deleteItem, tickItem } from '../controllers/checklist.js';
 import { weatherForTrip } from '../services/weather.js';
@@ -35,6 +35,10 @@ router.delete('/:id', requireMember, owner, deleteTrip);
 router.post('/:id/days/:day/activities', requireMember, planners, validateParams(dayParams), validateBody(newActivityBody), addActivity);
 router.patch('/:id/activities/:actId', requireMember, planners, validateParams(activityParams), validateBody(editActivityBody), editActivity);
 router.delete('/:id/activities/:actId', requireMember, planners, validateParams(activityParams), deleteActivity);
+
+// Best order for a day: any member can ask for the suggestion; owner and editors apply an order.
+router.get('/:id/days/:day/best-order', requireMember, validateParams(dayParams), bestOrder);
+router.put('/:id/days/:day/order', requireMember, planners, validateParams(dayParams), validateBody(orderBody), setOrder);
 
 // Weather for each day (any member). requireMember already loaded the destination and dates.
 router.get('/:id/weather', requireMember, rateLimit('weather', LIMITS.weather), async (req, res) => {
@@ -61,7 +65,7 @@ router.delete('/:id/members/:uid', requireMember, ownerOrSelf, validateParams(me
 
 // Bills, budget and settle up. Editing or deleting a bill: the owner any, an
 // editor only their own (ownBillOrOwner is the role step for those two routes).
-router.get('/:id/expenses', requireMember, listExpenses);
+router.get('/:id/expenses', requireMember, validateQuery(expensesQuery), listExpenses);
 router.post('/:id/expenses', requireMember, planners, validateBody(expenseBody), addExpense);
 router.patch('/:id/expenses/:expenseId', requireMember, planners, ownBillOrOwner, validateParams(expenseParams), validateBody(expenseBody), editExpense);
 router.delete('/:id/expenses/:expenseId', requireMember, planners, ownBillOrOwner, validateParams(expenseParams), deleteExpense);

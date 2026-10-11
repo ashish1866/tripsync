@@ -5,6 +5,7 @@ import DayRoad from '../../components/DayRoad';
 import TripMap from '../../components/TripMap';
 import StopForm from '../../components/StopForm';
 import StopNumber from '../../components/StopNumber';
+import BestOrder from '../../components/BestOrder';
 import Button from '../../components/Button';
 import Notice from '../../components/Notice';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -157,6 +158,12 @@ export default function DayPlan() {
                 </li>
               ))}
             </ol>
+          )}
+
+          {canPlan && day.activities.length >= 2 && (
+            <div className={styles.best}>
+              <BestOrder key={`${dayNumber}:${day.activities.map((a) => a.id).join(',')}`} trip={trip} dayNumber={dayNumber} onApplied={setTrip} />
+            </div>
           )}
 
           {canPlan ? (

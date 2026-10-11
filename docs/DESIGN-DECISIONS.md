@@ -135,6 +135,18 @@ Data choices:
 - Moving a stop to another day is one update computed inside MongoDB (take it out of every day, add it to the end of the new day), so other stops added meanwhile are kept.
 - At most 30 stops per day (409 with the reason). The stop search looks within 60 km of the destination, nearest first, through our API, so the Geoapify key never reaches the browser.
 
+## Best order and bill filters (Step 9)
+
+- **Best order** is a board on the Day plan (owners and editors, when a day has two or more stops): "Suggest the nearest-first order". Nothing changes until "Use this order". The suggestion shows the stops in the new order as the same small stones, each with "1.1 km from the stop before", and one sentence of totals: "In a straight line, your stops now cover 21 km. In this order they cover 14 km." It always carries the caution **"These are straight lines, not road distances. Mountain roads are longer, so check the route before you commit."** If the order is already nearest-first it says so and offers only Close. If the new order would put a later time before an earlier one, a red warning board says the times would run backwards. Viewers do not see the board (the API lets any member ask for the suggestion, but only owners and editors apply one).
+- **The rule:** start at the first stop that has a place, then keep going to the nearest stop not yet visited (Haversine, straight line). A stop without a place cannot be measured, so it goes to the end, and the board says so. Ties keep the order the stops are already in.
+- **Bill filters:** two drop-downs above the ledger, "Category" (All categories, the six categories, Payments marked as paid) and "Involving" (Everyone, or one member: any bill they paid or have a share in). The heading counts what is shown against the whole ("Bills and payments, 8 of 47"). A filter that matches nothing says "No bills match these filters" with a way back, and "Clear the filters" appears whenever one is on. Changing a filter returns to page 1.
+- **Paging:** 20 to a page, newest date first. Under the ledger: "Previous page", "Page 2 of 3. Showing 21 to 40 of 47.", "Next page". No page links to count through; the buttons lock at either end. The bills now load separately from settle up and the budget, each with its own error and retry, so a failure in one never hides the other.
+
+Data choices:
+- Applying an order is one update computed inside MongoDB from the day as it is at that moment (`PUT /trips/:id/days/:day/order`): the stops named come first in the order given, a stop added meanwhile stays at the end, a stop deleted meanwhile is skipped, and no other day or field is touched. No load-change-save.
+- The bills list is filtered and counted by MongoDB (`skip` and `limit` after a filter built in `server/src/utils/paging.js`). The person in the filter is plain text, checked by zod, never an object, so a request cannot slip in a MongoDB operator.
+- Haversine uses a 6,371 km earth. Answers are whole metres.
+
 ## Packing list (Step 8)
 
 - **Packing tab** (`/trips/:id/packing`): "Packing list", the packed strip ("8 of 12 packed. 4 to go.", the same painted bar as the budget, cap yellow), then one row per item, then the add box. When everything is ticked the line says "Everything is packed." with no celebration. The Overview has a small Packing section with the same strip.
@@ -218,6 +230,8 @@ Data choices:
 - A stranger gets 403 on a trip that exists and 404 on one that does not.
 
 ## Change log
+
+- 2026-10-12, Step 9: Best order board on the Day plan; Category and Involving filters and 20-a-page paging on the bills; bills load separately from settle up and the budget.
 
 - 2026-10-12, Step 8: Packing tab (painted tick boxes, packed strip, who packed what), Packing section on the Overview, `PackedBar`.
 
