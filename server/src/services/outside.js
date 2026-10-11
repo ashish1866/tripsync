@@ -13,10 +13,22 @@ import { HttpError } from '../utils/httpError.js';
 const USER_AGENT = 'TripSync/1.0 (college project; https://tripsync.ashishbisht.workers.dev)';
 const RETRY_PAUSE_MS = 1200;
 
+// Open-Meteo explains a refusal in a JSON field called "reason" (for example which request limit was reached).
+// That sentence is public and safe to show. Any other service's body (Geoapify's can mention keys) is never shown.
+function publicReason(body) {
+  try {
+    const parsed = JSON.parse(body);
+    return typeof parsed?.reason === 'string' ? parsed.reason.replace(/[^\x20-\x7E]/g, '').slice(0, 120) : '';
+  } catch {
+    return '';
+  }
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const worthRetrying = (status) => status === 429 || status >= 500;
 
-export async function fetchJson(url, { service, timeoutMs = 8000, retries = 1, retryPauseMs = RETRY_PAUSE_MS }) {
+// showReason: pass true only for services whose refusal text is public and key-free (Open-Meteo).
+export async function fetchJson(url, { service, timeoutMs = 8000, retries = 1, retryPauseMs = RETRY_PAUSE_MS, showReason = false }) {
   let failure = { kind: 'network' };
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) await sleep(retryPauseMs);
@@ -31,14 +43,16 @@ export async function fetchJson(url, { service, timeoutMs = 8000, retries = 1, r
     if (res.ok) return res.json();
 
     // The service's own reason helps when diagnosing, but never anything that could hold a key.
-    const reason = (await res.text().catch(() => '')).replace(/apikey=[^&"\s]+/gi, 'apikey=***').slice(0, 160);
-    console.error(`[${service}] answered HTTP ${res.status} (try ${attempt + 1}): ${reason}`);
-    failure = { kind: 'status', status: res.status };
+    const body = await res.text().catch(() => '');
+    const logged = body.replace(/apikey=[^&"\s]+/gi, 'apikey=***').slice(0, 160);
+    console.error(`[${service}] answered HTTP ${res.status} (try ${attempt + 1}): ${logged}`);
+    failure = { kind: 'status', status: res.status, said: showReason ? publicReason(body) : '' };
     if (!worthRetrying(res.status)) break;
   }
 
   if (failure.kind === 'status') {
-    throw new HttpError(503, `${service} could not answer this time (it replied HTTP ${failure.status}). Try again in a minute.`);
+    const said = failure.said ? `: ${failure.said}` : '';
+    throw new HttpError(503, `${service} could not answer this time (it replied HTTP ${failure.status}${said}). Try again in a minute.`);
   }
   throw new HttpError(503, `${service} is not answering right now. Try again in a minute.`);
 }

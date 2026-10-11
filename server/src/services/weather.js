@@ -30,7 +30,7 @@ async function cachedForecast(key) {
 
   const [lat, lng] = key.split(',');
   const params = new URLSearchParams({ latitude: lat, longitude: lng, daily: DAILY, timezone: 'auto', forecast_days: String(FORECAST_DAYS) });
-  const answer = await fetchJson(`${BASE}?${params}`, { service: 'The weather service' });
+  const answer = await fetchJson(`${BASE}?${params}`, { service: 'The weather service', showReason: true });
   const data = { timezone: answer.timezone ?? null, daily: answer.daily ?? null };
   const now = new Date();
   await cache.updateOne({ key }, { $set: { data, createdAt: now } }, { upsert: true });

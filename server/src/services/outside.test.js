@@ -45,6 +45,18 @@ describe('calling an outside service', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('shows the service\'s own reason only when the caller says that service\'s text is public', async () => {
+    const limited = () => reply(429, { error: true, reason: 'Hourly API request limit exceeded. Please try again in the next hour.' });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => limited()));
+    await expect(fetchJson('https://example.test/a', { ...fast, showReason: true })).rejects.toMatchObject({
+      message: 'The weather service could not answer this time (it replied HTTP 429: Hourly API request limit exceeded. Please try again in the next hour.). Try again in a minute.',
+    });
+    // Off by default, so a service like Geoapify can never put its text in front of a user.
+    await expect(fetchJson('https://example.test/a', fast)).rejects.toMatchObject({
+      message: 'The weather service could not answer this time (it replied HTTP 429). Try again in a minute.',
+    });
+  });
+
   it('does not retry a plain refusal such as 401 or 404', async () => {
     const fetchMock = vi.fn().mockResolvedValue(reply(401, { message: 'Invalid apiKey' }));
     vi.stubGlobal('fetch', fetchMock);

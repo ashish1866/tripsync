@@ -15,7 +15,7 @@ const SHOW_ABROAD = 2;
 async function search(q, countryCode) {
   const params = new URLSearchParams({ name: q, count: '100', language: 'en', format: 'json' });
   if (countryCode) params.set('countryCode', countryCode);
-  const data = await fetchJson(`${BASE}?${params}`, { service: 'The place search' });
+  const data = await fetchJson(`${BASE}?${params}`, { service: 'The place search', showReason: true });
   return Array.isArray(data.results) ? data.results : [];
 }
 
