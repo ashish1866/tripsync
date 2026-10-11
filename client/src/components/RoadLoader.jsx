@@ -1,3 +1,4 @@
+import RoadDashes from './RoadDashes';
 import styles from './RoadLoader.module.css';
 
 // The loading state: a stretch of road whose centre line moves, with a sentence
@@ -7,7 +8,7 @@ export default function RoadLoader({ label, fullPage = false }) {
   return (
     <div className={`${styles.wrap} ${fullPage ? styles.fullPage : ''}`} role="status" aria-live="polite">
       <div className={styles.road} aria-hidden="true">
-        <span className={styles.line} />
+        <RoadDashes size="road" />
       </div>
       <p className={styles.label}>{label}</p>
     </div>

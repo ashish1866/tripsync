@@ -57,6 +57,7 @@ To try the Cloudflare Worker locally as well, keep `npm run dev` running and run
 - `npm.cmd run check -- --live`: the same checks against the live site.
 - `npm.cmd run check -- --url=http://localhost:8788`: against any address, for example the local Worker.
 - `npm.cmd run check -- --look`: also saves screenshots in `checks/.artifacts` for judging the design.
+- `node checks/slopGuard.mjs`: only the slop guard (banned design values in the website's source; no server needed). It also runs first inside `npm.cmd run check`.
 - `npm.cmd test`: unit tests (the token check now; the settle-up maths later).
 
 The check creates throwaway accounts named `tripsync.check.*@example.com`. Each one is written to `checks/.artifacts/test-accounts.json` before it is created. At the end it is deleted from Firebase and MongoDB, and the deletion is confirmed by trying to log in again. If a run crashes, the next run deletes what it left behind.

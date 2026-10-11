@@ -1,0 +1,46 @@
+/*
+  The row of dashes slides left by exactly one dash plus one gap, then starts
+  again. After that shift the row looks the same as before, so the loop has no
+  visible jump: the line just seems to keep moving, like a road under a bus.
+*/
+.track {
+  display: flex;
+  gap: var(--dash-gap);
+  width: max-content;
+  animation: slide var(--dash-speed) linear infinite;
+}
+
+.dash {
+  flex: none;
+  width: var(--dash-length);
+  height: 3px;
+  background: var(--dash-paint);
+}
+
+/* On the loading strip: long white dashes on the dark road */
+.road {
+  --dash-length: 1.25rem;
+  --dash-gap: 1rem;
+  --dash-paint: var(--stone);
+  --dash-speed: 0.7s;
+}
+
+/* Along the bottom of a working button: short ink dashes */
+.button {
+  --dash-length: 0.6rem;
+  --dash-gap: 0.4rem;
+  --dash-paint: var(--ink);
+  --dash-speed: 0.6s;
+}
+
+@keyframes slide {
+  to {
+    transform: translateX(calc(-1 * (var(--dash-length) + var(--dash-gap))));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    animation: none;
+  }
+}

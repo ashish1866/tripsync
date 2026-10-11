@@ -6,6 +6,7 @@
 //   npm run check -- --look             (also save screenshots to judge the design)
 //
 // What it does:
+//   0. Slop guard: banned design values in client/src and client/index.html (see slopGuard.mjs).
 //   1. Public pages: title, favicon, fonts really loaded, focus ring, no console errors.
 //   2. API guard: every "must fail" request (no token, forged token, edited token, bad body).
 //   3. Profile API with a real Firebase account: 404 -> create 201 -> repeat 200, one Mongo document.
@@ -27,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { generateKeyPair, SignJWT } from 'jose';
 import { MongoClient } from 'mongodb';
 import { chromium } from 'playwright-core';
+import { runSlopGuard, describeHits } from './slopGuard.mjs';
 
 const LIVE_URL = 'https://tripsync.ashishbisht.workers.dev';
 const args = process.argv.slice(2);
@@ -165,6 +167,22 @@ async function shot(page, name) {
 
 async function overflowOf(page) {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+}
+
+// ====================== 0. Slop guard (reads the source files, needs no server) ======================
+section = 'Slop guard';
+try {
+  const slop = runSlopGuard();
+  record(`Scanned ${slop.fileCount} files in client/src and client/index.html`, slop.fileCount > 0 && slop.unreadable.length === 0, slop.unreadable.map((u) => `${u.file}: ${u.message}`).join('; ') || 'no files found');
+  for (const group of slop.groups) record(group.name, group.hits.length === 0, describeHits(group.hits));
+  const unlogged = slop.exceptions.filter((e) => !e.logged);
+  record(
+    `Every slop-ok exception has its reason in DESIGN-DECISIONS.md (${slop.exceptions.length} in use)`,
+    unlogged.length === 0,
+    unlogged.map((e) => `${e.file}:${e.line} "${e.reason || 'no reason'}"`).join('; '),
+  );
+} catch (err) {
+  record('The slop guard ran', false, err.message);
 }
 
 let apiToken = null; // the "api" test account's token, reused for timing

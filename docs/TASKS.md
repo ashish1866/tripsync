@@ -1,0 +1,50 @@
+# TripSync task list
+
+Kiro: do the first unticked step only, then stop (see `.kiro/steering/workflow.md`).
+Tick a box only when every "Done when" item has passed. Steps 0, 1 and 1.5 are finished (commits `5551242`, `8ef75e6`, `08d0101`, `70dcb53`).
+
+- [x] Step 0: setup, Atlas connection, one-command dev, day-one Worker test
+- [x] Step 1: Firebase sign-up/log-in, token check, `users/me`
+- [x] Step 1.5: API on Render, Worker forwards `/api`, keep-awake cron
+
+## - [x] Step 1.6: Slop guard (do this first)
+Add a section to `npm.cmd run check` that scans `client/src` and `client/index.html` and FAILS on banned values from `.kiro/steering/design.md`: `indigo`, `violet`, `purple`, `linear-gradient`, `radial-gradient`, `bg-clip-text`, `background-clip: text`, `text-transparent`, `backdrop-filter`, `box-shadow` (except `none` and the shared focus ring), `Inter`, `Roboto`, `Open Sans`, `system-ui`, `-apple-system`, `alert(`, `confirm(`, `lorem`, `TODO`, `Vite + React`, emoji characters in JSX, and the copy phrases "Get started", "Learn more", "Submit", "Click here", "seamless", "effortless", "elevate", "unlock", "Oops".
+- Match copy phrases only in user-visible text (JSX text and string literals shown on screen), case-sensitive, so variable names like `onSubmit` do not trip it.
+- A line ending in the comment `slop-ok: <reason>` is skipped, and the reason must also be logged in DESIGN-DECISIONS.md.
+- Done when: the check passes on the current code (fix or justify every hit), and a deliberately planted banned value makes it fail (then remove the plant).
+
+## - [ ] Step 2: Trips
+Create, list, edit, delete. Destination search through `/api/geo/destinations` (Open-Meteo geocoding). Map point for the destination (stone-shaped pin, not Leaflet's default). One day per date created automatically. Owner-only edit/delete. Shortening a trip is refused if the removed days have activities, with the reason.
+- Done when: "Manali Trip" shows on My Trips with its location; a stranger reading a trip gets 403; a non-owner editing gets 403; bad dates or budget get 400.
+
+## - [ ] Step 3: Itinerary and map
+Activities per day (title, time, notes, place via Geoapify autocomplete `/api/geo/spots`). Pins for the destination and every activity. Single-item updates only.
+- Done when: Day 2 shows Solang Valley with a pin; editing one activity never overwrites another member's edit; a viewer adding an activity gets 403.
+
+## - [ ] Step 4: Weather
+Open-Meteo forecast through the 3-hour `weatherCache` (location rounded to 2 decimals). Forecast on each day stone. Rain warning when rain chance is above 60% on a day with activities. Beyond the forecast range, the "closer to your trip" message.
+- Done when: forecast shows; a second visit does not call Open-Meteo (proved by a log or counter); the weather box failing does not break the rest of the page.
+
+## - [ ] Step 5: Members and roles
+Invite link/code (Editor or Viewer, 7 days, expiry checked in code). Join works for a logged-out visitor (log in, come back to the invite). Owner changes roles and removes members; owner cannot leave; a member who owes money cannot be removed. Rate limits on invite join and outside-API routes, counted per Firebase user, in Express.
+- Done when: a second test account joins; a Viewer gets 403 on every write route; an expired invite shows the expired message; joining twice says "You're already in this trip".
+
+## - [ ] Step 6: Expenses, budget, settle up
+Add/edit/delete (editors only their own). Equal or exact splits in paise with the leftover-paise rule. Budget by category in one aggregation, settlements excluded, chart themed with our tokens (milestone colour code), not Recharts defaults. Settle up: biggest debtor pays biggest creditor until zero. "Mark as paid" stored as a settlement.
+- Done when: unit tests pass for equal, uneven, rounding (Rs 1,000 / 3), already settled, and one-person-paid-everything; the brief's example gives Ankit -> Ashish 2,500, Rohan -> Ashish 2,500, Rahul -> Ashish 500; splits that do not add up get 400; an editor editing someone else's expense gets 403.
+
+## - [ ] Step 7: Explore nearby places
+Cafes, attractions, hotels, restaurants via Geoapify, `places` cache first. List plus map pins, distance, "Add to Day N". No ratings.
+- Done when: cafes near Manali appear; a second search for the same area uses the cache; "Add to Day 2" puts the place on Day 2.
+
+## - [ ] Step 8: Packing checklist
+Shared list, add, tick, delete, "8 of 12 packed". Editors and owner only for changes.
+- Done when: two accounts see each other's ticks after a refresh; a viewer ticking gets 403.
+
+## - [ ] Step 9: Extras
+Best order for a day (nearest-first, Haversine, labelled straight-line). Expense filters by category and person, 20 per page.
+- Done when: unit test for nearest-first passes; filters and paging return the right rows.
+
+## - [ ] Step 10: Demo prep and ship
+Confirm `tripsync_app` can use a new database `tripsync`; ask Ashish before switching Render's `MONGODB_DB`. Seed script for the Manali demo trip with realistic bills. README run and demo instructions. Then push `main` once, deploy the Worker, run `npm.cmd run check -- --live`, report medians.
+- Done when: the live site shows the seeded Manali trip end to end and the live check passes.

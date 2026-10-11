@@ -21,15 +21,16 @@
   background: var(--stone);
   border: var(--line);
   border-radius: var(--radius-sm);
-  transition: box-shadow var(--fast) var(--ease);
 }
 
+/* Typing in the field: the shared double focus ring around the whole field */
 .control:focus-within {
   box-shadow: var(--focus);
 }
 
+/* Hover: a 1px outline just outside the border makes the edge heavier */
 .control:hover:not(:focus-within) {
-  box-shadow: 0 0 0 1px var(--ink);
+  outline: 1px solid var(--ink);
 }
 
 .input {
@@ -71,8 +72,12 @@
   background: var(--ground);
 }
 
+/* The Show button sits inside a field that already shows the focus ring, so it
+   marks itself with a thick ink outline drawn inside its own edge instead. */
 .reveal:focus-visible {
-  box-shadow: inset 0 0 0 3px var(--ink);
+  box-shadow: none;
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
   border-radius: 0;
 }
 

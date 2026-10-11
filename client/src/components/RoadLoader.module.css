@@ -12,33 +12,16 @@
   padding: var(--space-6) var(--space-4);
 }
 
-/* Asphalt strip, edged like a kerb */
+/* Asphalt strip, edged like a kerb. The moving centre line (RoadDashes) runs
+   through its middle and is clipped at both ends. */
 .road {
-  position: relative;
+  display: flex;
+  align-items: center;
   width: 100%;
   height: 1.25rem;
   background: var(--ink);
   border-radius: var(--radius-sm);
   overflow: hidden;
-}
-
-/* Dashed centre line, scrolling towards you */
-.line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 3px;
-  margin-top: -1.5px;
-  background: repeating-linear-gradient(90deg, var(--stone) 0 1.25rem, transparent 1.25rem 2.25rem);
-  background-size: 2.25rem 100%;
-  animation: drive 0.7s linear infinite;
-}
-
-@keyframes drive {
-  to {
-    background-position: -2.25rem 0;
-  }
 }
 
 .label {
@@ -47,10 +30,4 @@
   font-stretch: var(--stretch-sign);
   font-weight: 600;
   font-size: var(--text-lg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .line {
-    animation: none;
-  }
 }

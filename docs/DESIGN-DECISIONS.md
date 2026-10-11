@@ -69,6 +69,18 @@ Buttons are flat painted plates with the same 2px outline:
 - **Working:** stays solid and shows the moving road dash along its bottom.
 - **Disabled:** faded, no hover change.
 
+How these are drawn (Step 1.6), so the slop guard can hold the "no shadows" rule:
+- The only `box-shadow` in the code is the shared focus ring (`var(--focus)`) and `none`.
+- Hover thickness is a CSS `outline`, not a shadow: 2px drawn just inside a button's border, and 1px just outside a text field's border.
+- The Show button in a password field sits inside a field that already wears the focus ring. It marks its own focus with a 3px ink outline drawn inside its edge.
+- The moving road line (loading strip and working button) is one shared component, `RoadDashes`. It is a row of real dash elements that slides left by one dash plus one gap and repeats. It used to be a striped CSS fill; that counted as a gradient, which the steering bans with no exceptions. It looks the same, and it still stands still under reduced motion.
+
+## Slop guard exceptions (slop-ok)
+
+`npm run check` fails on the banned values in `.kiro/steering/design.md`. A line may opt out only by ending in the comment `slop-ok: <reason>`, and only if that exact reason is written in this list.
+
+- (none in use)
+
 ## 7. What I deliberately did not do
 
 - No photos of destinations (we have none that are ours) and no stock travel imagery.
@@ -90,6 +102,7 @@ Buttons are flat painted plates with the same 2px outline:
 
 ## Change log
 
+- 2026-10-11, Step 1.6: added the slop guard to `npm run check`. Fixed its six hits without exceptions: two striped fills became the shared `RoadDashes` row, and four non-focus shadows became outlines. Nothing changes visibly.
 - 2026-10-11, Step 1.5: Ashish asked to drop the hard ink offset. Removed it from every button and board, along with the `--lift` token. Buttons now show hover as a heavier outline and press as a darker fill. The stone's 6px base stays; it is part of the stone's outline, not a shadow.
 - 2026-10-11, Step 1: landing page, sign-up and log-in forms, shared TextField, Notice, RoadLoader, AppHeader and Wordmark components, trips empty state, `/status`. Logged the hard offset edge as a near-D4 choice for Ashish to judge.
 - 2026-10-11, Step 0: first entry. Kilometre-stone direction, Anek plus Mukta, stone/ink/cap/signal palette, plain CSS with tokens. Shared `Milestone` and `Button` components. Buttons had a hard 3px ink offset (removed in Step 1.5).
