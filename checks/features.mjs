@@ -274,6 +274,8 @@ async function extrasChecks(ctx) {
 }
 
 // ====================== Step 8: packing checklist ======================
+// Ticks an item the way a person does: by clicking its painted box or its words (the real checkbox is invisible underneath).
+const clickItem = (page, text) => page.getByRole('list', { name: 'Things to pack' }).getByRole('listitem').filter({ hasText: text }).locator('label').click();
 async function packingChecks(ctx) {
   const { call, record, hasError } = ctx;
   ctx.setSection('Packing API');
@@ -386,7 +388,7 @@ async function packingChecks(ctx) {
     // screen-reader text, so matching the text alone finds two elements.)
     await mine.page.getByRole('checkbox', { name: new RegExp(`^${item}`) }).waitFor({ timeout: 15000 });
   }
-  await mine.page.getByRole('checkbox', { name: /Warm jacket/ }).check();
+  await clickItem(mine.page, 'Warm jacket');
   const barText = await mine.page.getByText('1 of 3 packed').waitFor({ timeout: 15000 }).then(() => true, () => false);
   record('Ticking "Warm jacket" shows "1 of 3 packed"', barText);
 
@@ -396,7 +398,7 @@ async function packingChecks(ctx) {
   const seesTick = await theirs.page.getByRole('checkbox', { name: /Warm jacket/ }).isChecked().catch(() => false);
   const packedBy = await theirs.page.getByText(/Packed by Ashish Bisht/).count();
   record("A second account sees the first one's tick after loading the page, and who packed it", seesTick && packedBy === 1, `checked ${seesTick}, ${packedBy} "Packed by"`);
-  await theirs.page.getByRole('checkbox', { name: /Power bank/ }).check();
+  await clickItem(theirs.page, 'Power bank');
   await theirs.page.getByText('2 of 3 packed').waitFor({ timeout: 15000 }).catch(() => {});
   await mine.page.reload({ waitUntil: 'networkidle' });
   const bothTicks = (await mine.page.getByRole('checkbox', { checked: true }).count()) === 2;
