@@ -50,12 +50,21 @@ async function forwardToApi(request, url, env) {
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
 
   try {
-    return await fetch(target, {
+    const res = await fetch(target, {
       method: request.method,
       headers,
       body: hasBody ? request.body : undefined,
       redirect: 'manual',
     });
+    if (res.status < 500) return res;
+    // An error the API chose to send, for example "The weather service could not answer"
+    // (502). Cloudflare swaps its own HTML error page in for a 5xx that is passed on as it
+    // came, so the API's JSON message would never reach the website. Building a fresh
+    // response with the same status and body keeps it.
+    const kept = new Headers(res.headers);
+    kept.delete('content-encoding');
+    kept.delete('content-length');
+    return new Response(await res.arrayBuffer(), { status: res.status, statusText: res.statusText, headers: kept });
   } catch (err) {
     console.error(`Could not reach the API at ${target}: ${err.message}`);
     return Response.json(
