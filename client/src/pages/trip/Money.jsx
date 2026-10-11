@@ -56,8 +56,11 @@ export default function Money() {
       if (filters.person) params.person = filters.person;
       const { data } = await api.get(`/trips/${trip.id}/expenses`, { params });
       // The last bill on a page was deleted: step back to the last page that still exists.
+      // `applied` keeps the filters this answer was asked with, so while the next answer loads
+      // the screen still describes the old answer correctly (never "No bills yet" for the old
+      // empty result seen through the new, cleared filters).
       if (data.page > data.pages) setPage(data.pages);
-      else setList({ status: 'ready', data });
+      else setList({ status: 'ready', data, applied: { category: filters.category, person: filters.person } });
     } catch (err) {
       setList({ status: 'error', message: errorMessage(err) });
     }
@@ -127,7 +130,9 @@ export default function Money() {
   const expenses = bills?.expenses ?? [];
   const everyBill = bills?.allTotal ?? null; // every bill and payment of the trip, whatever the filters
   const canChange = (e) => trip.myRole === 'owner' || (trip.myRole === 'editor' && e.createdBy === me);
-  const filtered = Boolean(filters.category || filters.person);
+  // What the bills on screen were filtered by (the drop-downs may already show the next choice).
+  const shown = list.status === 'ready' ? list.applied : filters;
+  const filtered = Boolean(shown.category || shown.person);
   const anyBills = bills ? bills.allTotal > 0 : Boolean(budget?.byCategory.length);
 
   return (
@@ -263,7 +268,7 @@ export default function Money() {
               onChange={changeFilter('person')}
               options={[{ value: '', label: 'Everyone' }, ...trip.members.map((m) => ({ value: m.uid, label: m.uid === me ? `${m.name} (you)` : m.name }))]}
             />
-            {filtered && (
+            {(filters.category || filters.person) && (
               <Button variant="plain" className={styles.clear} onClick={clearFilters}>
                 Clear the filters
               </Button>

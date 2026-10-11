@@ -225,8 +225,9 @@ async function extrasChecks(ctx) {
   const empty = await page.getByText('No bills match these filters.').waitFor({ timeout: 15000 }).then(() => true, () => false);
   record('A filter nothing matches says so and offers a way back', empty && (await page.getByRole('button', { name: 'Show every bill again' }).count()) === 1);
   await page.getByRole('button', { name: 'Clear the filters' }).click();
-  await page.getByRole('heading', { name: 'Bills and payments, 47' }).waitFor({ timeout: 15000 }).catch(() => {});
-  record('Clearing the filters brings back all 47', (await ledger.getByRole('listitem').count()) === 20);
+  await ledger.getByRole('listitem').nth(19).waitFor({ timeout: 15000 }).catch(() => {});
+  const noFlash = (await page.getByText('No bills yet.').count()) === 0;
+  record('Clearing the filters brings back all 47 (page 1 of 20 rows) and never says "No bills yet"', (await ledger.getByRole('listitem').count()) === 20 && noFlash && (await page.getByRole('heading', { name: 'Bills and payments, 47' }).count()) === 1, `${await ledger.getByRole('listitem').count()} rows, flash ${!noFlash}`);
   if (ctx.saveLook) await ctx.shot(page, 'money-filters');
 
   // Best order in the browser (its own page: the one above is logged in as someone else)
