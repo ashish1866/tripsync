@@ -6,6 +6,7 @@
     "dev": "node --watch-path=src --env-file=.dev.vars src/server.js",
     "start": "node src/server.js",
     "setup-db": "node --env-file=.dev.vars src/scripts/setupIndexes.js",
+    "seed": "node --env-file=.dev.vars src/scripts/seedDemo.js",
     "test": "vitest --run --passWithNoTests",
     "preview:worker": "wrangler dev --port 8788 --var API_ORIGIN:http://127.0.0.1:8787",
     "deploy": "wrangler deploy"

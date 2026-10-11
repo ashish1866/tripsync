@@ -9,6 +9,22 @@ College full-stack project by Ashish Bisht (24BCF10042) and Dhruv Grover (24BCF1
 
 Service status before a demo: https://tripsync.ashishbisht.workers.dev/status
 
+## What it does
+
+Open a trip and it has these tabs:
+
+| Tab | What it is for |
+|---|---|
+| Overview | The route as a row of day stones (date, stops, forecast), the map, the budget strip, packing progress, the group |
+| Day plan | Pick a day, add stops (searched on the map), edit or move them, and ask for the nearest-first order |
+| Explore | Cafes, restaurants, places to stay and things to see near the destination, with "Add to Day N" |
+| Money | Settle up (who pays whom), the budget by category, every bill with filters and 20-a-page paging |
+| Packing | One shared list with ticks and who packed what |
+| Members | Invite links (Editor or Viewer, 7 days), roles, removing people, leaving |
+| Trip settings | Owner only: name, dates, budget, delete the trip |
+
+Roles are enforced twice: the screen hides what a role cannot do, and the API refuses it with 403 either way. Money is stored as whole paise and is never a decimal. A stop's map point is stored as `[longitude, latitude]` and converted in one place.
+
 ## How it fits together
 
 ```text
@@ -20,6 +36,7 @@ Browser ──> Cloudflare Worker (tripsync.ashishbisht.workers.dev)
                       v
             Render, free plan, Singapore (server/, plain Node + Express)
               ├─ checks the Firebase login token on every request
+              ├─ asks Open-Meteo (forecast, town search) and Geoapify (places) for outside data
               └─ one shared MongoDB connection ──> MongoDB Atlas (Mumbai)
 ```
 
@@ -28,13 +45,15 @@ Browser ──> Cloudflare Worker (tripsync.ashishbisht.workers.dev)
 - `server/src/worker.js` + `server/wrangler.jsonc`: the Cloudflare Worker (website + forwarder + keep-awake ping)
 - `render.yaml`: how Render builds and runs the API. Setup steps: `docs/RENDER-SETUP.md`
 - Firebase handles sign-up and log-in; TripSync never stores passwords.
+- Every trip route runs the same chain, in this order: token valid (401), member of this trip (403), role allows it (403), input valid (400), then the work.
 
 The Render address is a setting (`API_ORIGIN` in `server/wrangler.jsonc`), not written into the code. The Worker holds no secrets: the database link and the Geoapify key live only on Render (and in `server/.dev.vars` on this PC).
 
 Things on the live setup that are worth knowing:
 
-- **Speed:** a live API request takes about 0.3 to 0.4 s from Ashish's PC (measured 2026-10-11, median of 10). Most of that is the trip. On Cloudflare's free plan, visitors on this connection reach Cloudflare in Marseille, not India; the Worker then calls Render in Singapore. Calling Render directly takes about 0.19 s.
+- **Speed:** see "Measured speed" at the end of this file.
 - **Sleeping:** Render's free plan sleeps after 15 quiet minutes. The Worker's Cron Trigger pings `/api/health/ping` every 10 minutes to keep it awake (results are in the Worker's logs). If it does sleep, the first request takes about a minute and the site shows "not answering, try again in a minute".
+- **Outside services:** the forecast (Open-Meteo, cached 3 hours per town) and the place searches (Geoapify, cached 7 days) can fail on their own. When they do, only the weather box or the results list shows an error; the rest of the trip keeps working.
 
 ## Run it on your PC
 
@@ -51,33 +70,75 @@ On this PC, PowerShell blocks `npm` scripts, so type `npm.cmd` (or use Command P
 
 To try the Cloudflare Worker locally as well, keep `npm run dev` running and run `npm.cmd run preview:worker`. This builds the website and opens the Worker at http://localhost:8788, forwarding `/api` to the local API.
 
+## The demo trip
+
+`npm.cmd run seed` loads a ready-made "Manali Trip" so the demo starts with real-looking data: four days, 12 stops (10 with a real map point: Hadimba Devi Temple, Solang Valley, Jogini Falls and others; the last day's checkout and bus have none, on purpose), a Rs 45,000 budget, 14 bills (hotel, Volvo tickets, cabs, paragliding, food, with equal and exact splits), one payment already marked as paid, and a packing list that is 5 of 8 packed.
+
+1. Open the website and sign up or log in with the account that should own the trip. (This creates your profile, which the seed needs.)
+2. Load the trip: `npm.cmd run seed -- --owner your@email.com`
+3. Log in as that account. "Manali Trip" is on Your trips.
+
+Options (after `--`): `--db NAME` loads into another database, `--start 2026-10-20` sets the first day (default: three days from today, so the forecast shows), `--remove` takes the demo trip and its demo friends out again. Running it again replaces the earlier demo trip and never touches your other trips. Run it against the same database the API uses (the one in `server/.dev.vars`, or `MONGODB_DB` on Render).
+
+The group is you (owner), plus Rahul and Ankit (editors) and Rohan (viewer). The three friends are demo profiles flagged `demo`: they show up in the group, the bills and settle up, but have no login. To show how roles and invites work for real, make an invite on the Members tab and open it in a second browser (or a private window) with another account.
+
+### A five-minute walk through it
+
+1. **Your trips:** the trip with its dates, the budget strip and "Starts in 3 days".
+2. **Overview:** the day stones with the real forecast (and a red rain warning if a day with stops has more than a 60% chance of rain; whether one shows depends on the weather that day), the map with a stone pin per stop, the packing strip.
+3. **Day plan:** pick Day 2, see Solang Valley on the map. Add a stop with the place search. Press "Suggest the nearest-first order" and read the straight-line caution before using it.
+4. **Explore:** cafes within 5 km, then "Add to Day 3" and see it on the plan.
+5. **Money:** settle up first (the shortest list of who pays whom, in rupees with Indian grouping), then the budget by category in the kilometre-stone colours, then the bills. Filter by category or person and page through them. Press "Mark as paid" on one payment and watch settle up shrink.
+6. **Members:** make an Editor link, open it in a private window and join. Make someone a viewer and show that the add buttons disappear and that the API refuses the same action (403).
+7. **Packing:** tick an item in one window and refresh the other.
+
 ## Check it
 
-- `npm.cmd run check`: one pass/fail report. It runs every "must fail" API request (no token, forged token, bad input) and the sign-up, log-in and log-out story in Chrome. It also times 10 requests to each of three API routes. It needs `npm run dev` running.
-- `npm.cmd run check -- --live`: the same checks against the live site.
+- `npm.cmd test`: unit tests (the token check, dates to days, weather rules, the settle-up maths, equal splits with the leftover-paise rule, Haversine and nearest-first order, paging and filters, input rules, and the demo trip).
+- `npm.cmd run check`: one pass/fail report with every step's checks: the "must fail" API requests (no token, forged token, a viewer writing, a stranger reading, bad input), concurrent edits, the invite flow, rate limits, and every screen in Chrome at laptop (1280 px) and phone (390 px) width. It also times 10 requests to each of three API routes. It needs `npm run dev` running and takes about three minutes.
+- `npm.cmd run check -- --live`: the same checks against the live site. Name the database the live API uses if it is not the one in `server/.dev.vars`: `npm.cmd run check -- --live --db=tripsync`.
 - `npm.cmd run check -- --url=http://localhost:8788`: against any address, for example the local Worker.
 - `npm.cmd run check -- --look`: also saves screenshots in `checks/.artifacts` for judging the design.
 - `node checks/slopGuard.mjs`: only the slop guard (banned design values in the website's source; no server needed). It also runs first inside `npm.cmd run check`.
-- `npm.cmd test`: unit tests (the token check now; the settle-up maths later).
 
-The check creates throwaway accounts named `tripsync.check.*@example.com`. Each one is written to `checks/.artifacts/test-accounts.json` before it is created. At the end it is deleted from Firebase and MongoDB, and the deletion is confirmed by trying to log in again. If a run crashes, the next run deletes what it left behind.
+**Test accounts.** Firebase limits how fast accounts can be created, so the check keeps a fixed pool of 14 accounts named `tripsync.check.pool.*@example.com`. Each is created once, and its email and random password are kept in `checks/.test-accounts.json` (git-ignored). Every run logs in to the same accounts, wipes everything they own in MongoDB at the start and again at the end, and checks the data is gone. Only the sign-up story makes one fresh account per run (`tripsync.check.<time>.web@example.com`), which is written to `checks/.artifacts/test-accounts.json` before it is created, deleted from Firebase and MongoDB at the end, and confirmed gone by trying to log in again. To remove the whole pool for good: `npm.cmd run check -- --delete-pool`.
 
 ## Deploy
 
 - **API:** pushing to `main` redeploys it on Render by itself (when something in `server/` changed). After changing a server dependency, run `npm.cmd run lock:server` and commit `server/package-lock.json`, because Render installs from that file.
 - **Website and Worker:** `npm.cmd run deploy` builds the website and uploads it with the Worker.
+- **Database:** the API uses the database named by `MONGODB_DB` (`tripsync_dev` in `render.yaml`). The `tripsync_app` Atlas user can also use a database named `tripsync` (tested), so a separate demo database only needs `MONGODB_DB` changed on Render, `npm.cmd run setup-db` run against it, and the seed loaded into it.
 
-## API so far
+## API
+
+Every route needs a login (a Firebase token) except the two health routes and the invite preview. Errors always come back as `{ "error": "message" }`; answers are never cached (`Cache-Control: no-store`). "Planners" means the owner and editors.
 
 | Route | Who | What |
 |---|---|---|
-| `GET /api/health/ping` | anyone | Answers without touching the database (keep-awake ping, Render health check) |
-| `GET /api/health` | anyone | Checks that MongoDB answers |
-| `GET /api/users/me` | logged in | Your TripSync profile, or 404 if not created yet |
-| `POST /api/users/me` | logged in | Creates your profile `{ name }`; repeating it returns the existing one |
+| `GET /api/health/ping`, `GET /api/health` | anyone | Alive without the database; and with the MongoDB check |
+| `GET` / `POST /api/users/me` | logged in | Your profile; create it once `{ name }` |
+| `GET /api/trips`, `POST /api/trips` | logged in | Your trips (with spent so far); create one |
+| `GET /api/trips/:id` | members | The whole trip |
+| `PATCH` / `DELETE /api/trips/:id` | owner | Change name, dates, budget; delete it with its bills and invites |
+| `GET /api/geo/destinations?q=`, `GET /api/geo/spots?q=&tripId=` | logged in / members | Town search (Open-Meteo); place search near the trip (Geoapify, key stays on the server) |
+| `POST /api/trips/:id/days/:day/activities`, `PATCH` / `DELETE /api/trips/:id/activities/:actId` | planners | Add, change (field by field, or move to another day), remove a stop |
+| `GET /api/trips/:id/days/:day/best-order`, `PUT /api/trips/:id/days/:day/order` | members / planners | Suggest the nearest-first order (straight-line); apply an order |
+| `GET /api/trips/:id/weather` | members | Forecast per day (3-hour cache, 16 days ahead) |
+| `GET /api/trips/:id/places?category=&radius=` | members | Cafes, restaurants, places to stay, things to see (cache first) |
+| `POST` / `GET` / `DELETE /api/trips/:id/invites[/:code]` | owner | Make, list, stop an invite link |
+| `GET /api/invites/:code`, `POST /api/invites/:code/join` | anyone / logged in | Preview an invite; join with it |
+| `PATCH` / `DELETE /api/trips/:id/members/:uid` | owner (leave: yourself) | Change a role; remove someone or leave |
+| `GET /api/trips/:id/expenses?category=&person=&page=` | members | Bills, newest first, 20 a page |
+| `POST` / `PATCH` / `DELETE /api/trips/:id/expenses[/:id]` | planners (editors: only their own) | Add, change, delete a bill |
+| `GET /api/trips/:id/budget`, `GET` / `POST /api/trips/:id/settlements` | members / planners | Spent by category (settlements left out); who pays whom; "Mark as paid" |
+| `POST` / `PATCH` / `DELETE /api/trips/:id/checklist[/:itemId]` | planners | Add, tick, remove a packing item |
 
-Errors always come back as `{ "error": "message" }`. API answers are never cached (`Cache-Control: no-store`).
+Joins, searches, weather and nearby-place requests are rate-limited per Firebase user (429 with `Retry-After`).
 
 ## Design
 
 The visual decisions and the reasons for them are in `docs/DESIGN-DECISIONS.md`.
+
+## Measured speed
+
+(filled in after the live check)

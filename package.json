@@ -13,6 +13,7 @@
     "preview:worker": "npm run build -w client && npm run preview:worker -w server",
     "test": "npm run test -w server",
     "setup-db": "npm run setup-db -w server",
+    "seed": "npm run seed -w server --",
     "lock:server": "node scripts/lock-server.mjs",
     "check": "node checks/run.mjs"
   },

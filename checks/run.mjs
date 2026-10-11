@@ -4,6 +4,8 @@
 //   npm run check -- --live             (the deployed site)
 //   npm run check -- --url=http://...   (any other address, e.g. the Worker under `npm run preview:worker`)
 //   npm run check -- --look             (also save screenshots to judge the design)
+//   npm run check -- --db=tripsync      (the database the API under test uses, if not the one in server/.dev.vars)
+//   npm run check -- --delete-pool      (remove the fixed test accounts from Firebase and MongoDB, see below)
 //
 // What it does:
 //   0. Slop guard: banned design values in client/src and client/index.html (see slopGuard.mjs).
@@ -41,6 +43,9 @@ const args = process.argv.slice(2);
 const urlArg = args.find((a) => a.startsWith('--url='));
 const base = (urlArg ? urlArg.slice('--url='.length) : args.includes('--live') ? LIVE_URL : 'http://localhost:5173').replace(/\/+$/, '');
 const saveLook = args.includes('--look');
+// The MongoDB database the check inspects directly (profiles, wipes). It MUST be the database the API under test uses:
+// by default the one in server/.dev.vars; name another with --db=tripsync (for example when Render's MONGODB_DB is not tripsync_dev).
+const dbArg = args.find((a) => a.startsWith('--db='));
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = path.join(root, 'checks', '.artifacts');
 mkdirSync(artifacts, { recursive: true });
@@ -152,7 +157,8 @@ async function call(method, route, { token, body, rawBody, headers = {} } = {}) 
 const hasError = (r) => typeof r.data?.error === 'string' && r.data.error.length > 0;
 
 const mongo = new MongoClient(serverEnv.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
-const mongoDb = () => mongo.db(serverEnv.MONGODB_DB || 'tripsync_dev');
+const DB_NAME = dbArg ? dbArg.slice('--db='.length) : serverEnv.MONGODB_DB || 'tripsync_dev';
+const mongoDb = () => mongo.db(DB_NAME);
 const users = () => mongoDb().collection('users');
 
 // Everything a throwaway account left in MongoDB: its profile, the trips it
@@ -405,7 +411,7 @@ try {
     await page.goto(base + '/status', { waitUntil: 'networkidle' });
     await page.getByText(/answered in \d+ ms/i).nth(1).waitFor({ timeout: 30000 }).catch(() => {});
     const statusText = (await page.locator('ul').innerText()).replace(/\s+/g, ' ');
-    record('/status shows the API and the database answering', /Passed: Answered in \d+ ms/.test(statusText) && /Passed: tripsync_dev on MongoDB Atlas/.test(statusText), statusText);
+    record('/status shows the API and the database answering', /Passed: Answered in \d+ ms/.test(statusText) && statusText.includes(`Passed: ${DB_NAME} on MongoDB Atlas`), statusText);
 
     const res = await page.goto(base + '/no/such/road', { waitUntil: 'networkidle' });
     const nf = await page.locator('h1').innerText().catch(() => '');
@@ -689,7 +695,7 @@ try {
 
 // ---------- print the report ----------
 const failed = results.filter((r) => !r.ok);
-console.log(`\nTripSync check: ${base}`);
+console.log(`\nTripSync check: ${base} (database ${DB_NAME})`);
 let last = '';
 for (const r of results) {
   if (r.section !== last) {
