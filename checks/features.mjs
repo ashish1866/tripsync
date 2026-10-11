@@ -114,9 +114,11 @@ async function extrasChecks(ctx) {
 
   // Stops with no place, and times that would run backwards
   const noPlace = await add(2, 'Lunch somewhere', null);
-  await add(2, 'Far stop', SOLANG, '09:00');
-  await add(2, 'Near stop', HADIMBA, '10:00');
-  await add(2, 'Start', MALL, '13:00');
+  // Stops are stored in time order: Start 09:00, Far 10:00, Near 11:00. Nearest-first from Start
+  // goes to Near before Far, so the times would read 09:00, 11:00, 10:00 (backwards).
+  await add(2, 'Start', MALL, '09:00');
+  await add(2, 'Far stop', SOLANG, '10:00');
+  await add(2, 'Near stop', HADIMBA, '11:00');
   const day2 = await call('GET', `${t}/days/2/best-order`, { token: owner.token });
   record('A stop with no map point goes last, and the answer counts placed and unplaced stops', day2.data?.order?.at(-1)?.id === noPlace?.id && day2.data.placedCount === 3 && day2.data.unplacedCount === 1 && day2.data.order.at(-1).metresFromPrevious === null, titles(day2.data?.order || []));
   record('If the new order puts a later time before an earlier one, it says so (timeClash)', day2.data?.timeClash === true && day2.data.changed === true, `timeClash ${day2.data?.timeClash}`);
