@@ -13,6 +13,7 @@
   --cap-pressed: #d9aa00; /* the cap colour while a button is held down */
   --signal: #b81f17;      /* road-sign red: warnings, money owed, destructive actions (5:1 on --ground) */
   --signal-wash: #f6dcd9; /* pale red ground behind a warning */
+  --signal-pressed: #961811; /* the red while a delete button is held down */
 
   /* Type: Anek for painted lettering, Mukta for reading */
   --font-display: 'Anek Latin Variable', 'Anek Devanagari Variable', 'Mukta', sans-serif;
@@ -40,12 +41,11 @@
   --space-8: 4.5rem;
   --page-gutter: clamp(1rem, 5vw, 4.5rem); /* left/right page margin on every screen */
 
-  /* Shape: painted stone is flat. Edges are ink lines, not shadows. */
+  /* Shape: painted stone is flat. Edges are ink lines; nothing has a shadow. */
   --line: 2px solid var(--ink);
   --line-thin: 1px solid var(--ink);
   --radius-sm: 3px;
   --radius-dome: 999px 999px 0 0;  /* the rounded top of a kilometre stone */
-  --lift: 3px 3px 0 var(--ink);    /* a hard offset edge, like a stone's shadow at noon */
 
   /* Motion: short and plain, no bounce */
   --ease: cubic-bezier(0.2, 0, 0, 1);

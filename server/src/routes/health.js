@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getConfig } from '../config/env.js';
+import { getDb } from '../config/db.js';
 
 const router = Router();
 
@@ -16,7 +17,7 @@ router.get('/ping', (req, res) => {
 // route never reveals anything about who uses TripSync.
 router.get('/', async (req, res) => {
   const started = Date.now();
-  const db = await req.getDb();
+  const db = await getDb();
   await db.command({ ping: 1 });
 
   res.json({

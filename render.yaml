@@ -1,0 +1,28 @@
+# Render Blueprint: the TripSync API (Step 1.5).
+#
+# Free instance in Singapore, built from the server/ folder only.
+# The secrets (MONGODB_URI, GEOAPIFY_KEY) are marked "sync: false": Render asks
+# for their values in its dashboard when the Blueprint is first created. They
+# are never written into this repo. Setup steps: docs/RENDER-SETUP.md
+services:
+  - type: web
+    name: tripsync-api
+    runtime: node
+    plan: free # leaving this out would pick a paid plan
+    region: singapore
+    rootDir: server # Render only sees this folder, so it has its own package-lock.json
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    healthCheckPath: /api/health/ping # answers without touching MongoDB
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 22.23.2 # the version this project is built and tested with
+      - key: FIREBASE_PROJECT_ID
+        value: tripsync-d3e9b # public: it only names our Firebase project
+      - key: MONGODB_DB
+        value: tripsync_dev
+      - key: MONGODB_URI
+        sync: false # secret: typed into Render's dashboard
+      - key: GEOAPIFY_KEY
+        sync: false # secret: not used until the Explore step, but asked for now (see the guide)

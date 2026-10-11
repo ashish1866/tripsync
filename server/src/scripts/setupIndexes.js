@@ -1,7 +1,7 @@
-import { withDb } from '../config/db.js';
+import { getDb, closeDb } from '../config/db.js';
 
 // One-time (safe to re-run) database setup: creates the indexes from the brief.
-// Run with: npm run setup-db
+// Run with: npm run setup-db   (from the server folder, reads server/.dev.vars)
 // createIndex does nothing if the same index already exists.
 
 const DAY = 24 * 60 * 60;
@@ -24,10 +24,13 @@ const indexes = [
   { collection: 'invites', keys: { createdAt: 1 }, options: { expireAfterSeconds: 7 * DAY, name: 'createdAt_ttl_7d' } },
 ];
 
-await withDb(async (db) => {
+try {
+  const db = await getDb();
   for (const { collection, keys, options } of indexes) {
     const name = await db.collection(collection).createIndex(keys, options);
     console.log(`  ${collection}: ${name}`);
   }
   console.log('Indexes are in place.');
-});
+} finally {
+  await closeDb();
+}

@@ -1,3 +1,4 @@
+import { getDb } from '../config/db.js';
 import { userDocument, toPublicUser } from '../schemas/user.js';
 import { HttpError } from '../utils/httpError.js';
 
@@ -5,7 +6,7 @@ import { HttpError } from '../utils/httpError.js';
 // The logged-in user's TripSync profile. 404 means "logged in with Firebase,
 // but no TripSync profile yet", which tells the website to create one.
 export async function getMe(req, res) {
-  const db = await req.getDb();
+  const db = await getDb();
   const user = await db.collection('users').findOne({ firebaseUid: req.user.uid });
   if (!user) {
     throw new HttpError(404, 'You do not have a TripSync profile yet.');
@@ -18,7 +19,7 @@ export async function getMe(req, res) {
 // if the profile already exists it is returned unchanged (200), otherwise it
 // is created (201). The user id and email come from the verified token.
 export async function createMe(req, res) {
-  const db = await req.getDb();
+  const db = await getDb();
   const users = db.collection('users');
 
   const newProfile = userDocument.parse({

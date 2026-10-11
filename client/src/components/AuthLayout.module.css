@@ -27,13 +27,12 @@
   margin-bottom: var(--space-5);
 }
 
-/* The form sits on a whitewashed board with a hard ink edge */
+/* The form sits on a whitewashed board outlined in ink */
 .board {
   padding: var(--space-5);
   background: var(--stone);
   border: var(--line);
   border-radius: var(--radius-sm);
-  box-shadow: 6px 6px 0 var(--ink);
 }
 
 .footer {
@@ -53,6 +52,5 @@
 
   .board {
     padding: var(--space-4);
-    box-shadow: 4px 4px 0 var(--ink);
   }
 }

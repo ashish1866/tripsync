@@ -54,7 +54,20 @@ The landing page does not use the hero template. It opens with a left-aligned st
 ## 6. Default-ban items used, with reasons
 
 - **D10, uppercase:** Place names and day markers painted on stones use condensed uppercase, because that is how real milestones are lettered. The TRIPSYNC wordmark uses the same lettering because it is the name on the stone. Uppercase is used only on stone lettering, never for small label text above headings.
-- **Hard offset edge (close to D4's "brutalist costume", so flagged for Ashish):** Buttons and boards (the forms, the ledger slip) have a solid ink edge offset down and right, instead of a soft shadow. Reason: they are meant as painted boards standing off the ground, the same way each stone sits on a thick 6px base. It is used only on things that stand up (buttons, boards, stones), never on text, lists or the page frame. If Ashish reads it as a trend look, the fallback is to drop the offset and keep the 2px ink outline alone.
+- None other. (A hard ink offset edge on buttons and boards was used in Steps 0 and 1. It was close to D4's "brutalist costume", and Ashish had it removed: see "Surfaces and buttons" below.)
+
+## Surfaces and buttons (decided by Ashish, Step 1.5)
+
+Nothing in TripSync has a shadow, hard or soft. Every board (the forms, the ledger slip, the status list) is whitewashed stone with a 2px ink outline, and that is all.
+
+The only heavy line left is the 6px base under each kilometre stone. It is part of the stone's outline (where it meets the ground) and is drawn as the stone's own bottom border, not as an offset or a shadow. No other element copies it.
+
+Buttons are flat painted plates with the same 2px outline:
+- **Hover:** the outline gets heavier (2px to 4px). Nothing moves.
+- **Pressed:** the fill darkens (deeper yellow, or a slightly darker plate) and the button moves down 1px.
+- **Focus:** the same double ring as every other control.
+- **Working:** stays solid and shows the moving road dash along its bottom.
+- **Disabled:** faded, no hover change.
 
 ## 7. What I deliberately did not do
 
@@ -72,10 +85,11 @@ The landing page does not use the hero template. It opens with a left-aligned st
 - **Not found (`*`):** a small "No road / 404" stone and one sentence saying what happened, plus a button back home.
 - **Sign up / log in:** one form on a whitewashed board, set left of centre like a roadside sign rather than a centred modal. Field errors sit under their field with the warning-sign triangle, and focus jumps to the first one. Passwords have a Show button for typing on phones. After logging in, `?next=` brings you back to the page you opened (needed for invite links in Step 5); only TripSync paths are accepted.
 - **Your trips (empty state):** an unpainted stone (dashed outline) and a sentence saying where trips will appear. Not a grey icon with "No data found".
-- **Loading:** a short strip of road whose dashed centre line moves, plus a sentence saying what we are waiting for ("Checking your login"). It stands still under reduced motion. A button that is working stays solid, sinks in, and shows the same moving dash along its bottom.
+- **Loading:** a short strip of road whose dashed centre line moves, plus a sentence saying what we are waiting for ("Checking your login"). It stands still under reduced motion. A button that is working stays solid and shows the same moving dash along its bottom.
 - **Service status (`/status`):** the Step 0 build check, kept as a plain page that shows whether the API and database answer. Useful before a demo once the API sleeps on Render.
 
 ## Change log
 
+- 2026-10-11, Step 1.5: Ashish asked to drop the hard ink offset. Removed it from every button and board, along with the `--lift` token. Buttons now show hover as a heavier outline and press as a darker fill. The stone's 6px base stays; it is part of the stone's outline, not a shadow.
 - 2026-10-11, Step 1: landing page, sign-up and log-in forms, shared TextField, Notice, RoadLoader, AppHeader and Wordmark components, trips empty state, `/status`. Logged the hard offset edge as a near-D4 choice for Ashish to judge.
-- 2026-10-11, Step 0: first entry. Kilometre-stone direction, Anek plus Mukta, stone/ink/cap/signal palette, plain CSS with tokens. Shared `Milestone` and `Button` components. Buttons have a hard 3px ink offset instead of a soft shadow; pressing one sinks it onto that edge.
+- 2026-10-11, Step 0: first entry. Kilometre-stone direction, Anek plus Mukta, stone/ink/cap/signal palette, plain CSS with tokens. Shared `Milestone` and `Button` components. Buttons had a hard 3px ink offset (removed in Step 1.5).

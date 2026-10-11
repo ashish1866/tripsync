@@ -10,8 +10,10 @@
     "dev": "concurrently --names api,web --prefix-colors yellow,cyan --kill-others-on-fail \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build -w client",
     "deploy": "npm run build -w client && npm run deploy -w server",
+    "preview:worker": "npm run build -w client && npm run preview:worker -w server",
     "test": "npm run test -w server",
     "setup-db": "npm run setup-db -w server",
+    "lock:server": "node scripts/lock-server.mjs",
     "check": "node checks/run.mjs"
   },
   "devDependencies": {
@@ -19,6 +21,6 @@
     "playwright-core": "1.64.0"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.12.0 <23"
   }
 }

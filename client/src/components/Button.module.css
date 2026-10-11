@@ -7,7 +7,6 @@
   padding: var(--space-2) var(--space-5);
   border: var(--line);
   border-radius: var(--radius-sm);
-  box-shadow: var(--lift);
   font-family: var(--font-display);
   font-stretch: var(--stretch-sign);
   font-size: var(--text-md);
@@ -18,24 +17,27 @@
   white-space: nowrap; /* labels are short; a two-line button reads as broken */
   cursor: pointer;
   transition:
-    transform var(--fast) var(--ease),
     box-shadow var(--fast) var(--ease),
-    background-color var(--fast) var(--ease);
+    background-color var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
 }
 
+/* Hover: the painted outline gets heavier (2px to 4px). Flat, no shadow. */
 .button:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--ink);
+  box-shadow: inset 0 0 0 2px var(--ink);
 }
 
-/* Pressed: the button sinks onto its shadow */
+/* Pressed: darker paint, pressed in by one pixel */
 .button:active {
-  transform: translate(3px, 3px);
-  box-shadow: 0 0 0 var(--ink);
+  transform: translateY(1px);
 }
 
 .button:focus-visible {
-  box-shadow: var(--lift), var(--focus);
+  box-shadow: var(--focus);
+}
+
+.button:focus-visible:hover {
+  box-shadow: inset 0 0 0 2px var(--ink), var(--focus);
 }
 
 .button:disabled {
@@ -45,12 +47,10 @@
   opacity: 0.6;
 }
 
-/* Working: stays solid (it is not "unavailable"), pressed in, with a moving centre line */
+/* Working: stays solid (it is not "unavailable"), with a moving centre line along the bottom */
 .button.busy {
   opacity: 1;
   cursor: progress;
-  transform: translate(3px, 3px);
-  box-shadow: none;
   background-image: repeating-linear-gradient(90deg, var(--ink) 0 0.6rem, transparent 0.6rem 1rem);
   background-size: 1rem 3px;
   background-repeat: repeat-x;
@@ -65,17 +65,23 @@
 }
 
 .primary {
-  background: var(--cap);
+  background-color: var(--cap);
 }
 .primary:active {
-  background: var(--cap-pressed);
+  background-color: var(--cap-pressed);
 }
 
 .plain {
-  background: var(--stone);
+  background-color: var(--stone);
+}
+.plain:active {
+  background-color: var(--ground);
 }
 
 .danger {
-  background: var(--signal);
+  background-color: var(--signal);
   color: var(--stone);
+}
+.danger:active {
+  background-color: var(--signal-pressed);
 }

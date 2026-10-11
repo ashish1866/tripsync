@@ -1,6 +1,6 @@
 import { HttpError } from '../utils/httpError.js';
 
-// Any /api path that no router handled.
+// Any path that no router handled.
 export function notFound(req, res) {
   res.status(404).json({ error: `There is no API route for ${req.method} ${req.originalUrl}.` });
 }

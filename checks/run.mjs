@@ -1,20 +1,27 @@
 // TripSync check: one command, one short pass/fail report.
 //
-//   npm run check                (local: http://localhost:5173, needs `npm run dev` running)
-//   npm run check -- --live      (the deployed site)
-//   npm run check -- --look      (also save screenshots to judge the design)
+//   npm run check                       (local: http://localhost:5173, needs `npm run dev` running)
+//   npm run check -- --live             (the deployed site)
+//   npm run check -- --url=http://...   (any other address, e.g. the Worker under `npm run preview:worker`)
+//   npm run check -- --look             (also save screenshots to judge the design)
 //
 // What it does:
 //   1. Public pages: title, favicon, fonts really loaded, focus ring, no console errors.
 //   2. API guard: every "must fail" request (no token, forged token, edited token, bad body).
 //   3. Profile API with a real Firebase account: 404 -> create 201 -> repeat 200, one Mongo document.
-//   4. The sign-up / log-in / log-out story in a real browser, plus phone width.
-// It creates throwaway Firebase accounts (tripsync.check.*@example.com) and deletes
-// them again, together with their MongoDB profiles, even when a check fails.
+//   4. Timing: 10 requests each to three API routes, min / median / max.
+//   5. The sign-up / log-in / log-out story in a real browser, plus phone width.
+//
+// Throwaway accounts: it creates Firebase accounts named tripsync.check.*@example.com.
+// Each one is written to checks/.artifacts/test-accounts.json BEFORE it is created.
+// At the end, every account in that file is deleted from Firebase (accounts:delete
+// with that user's own ID token) and from MongoDB, and the deletion is proved by
+// trying to log in again. Accounts left over by an earlier run that crashed are
+// deleted the same way on the next run.
 //
 // Uses the Chrome already installed on this PC (playwright-core, no browser download).
 // Screenshots go to checks/.artifacts only when a check fails, or with --look.
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPair, SignJWT } from 'jose';
@@ -23,7 +30,8 @@ import { chromium } from 'playwright-core';
 
 const LIVE_URL = 'https://tripsync.ashishbisht.workers.dev';
 const args = process.argv.slice(2);
-const base = args.includes('--live') ? LIVE_URL : 'http://localhost:5173';
+const urlArg = args.find((a) => a.startsWith('--url='));
+const base = (urlArg ? urlArg.slice('--url='.length) : args.includes('--live') ? LIVE_URL : 'http://localhost:5173').replace(/\/+$/, '');
 const saveLook = args.includes('--look');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = path.join(root, 'checks', '.artifacts');
@@ -63,12 +71,60 @@ async function firebase(method, body) {
   return data;
 }
 
+// ---------- throwaway accounts, tracked in a git-ignored ledger ----------
+const LEDGER = path.join(artifacts, 'test-accounts.json');
+const ledger = existsSync(LEDGER) ? JSON.parse(readFileSync(LEDGER, 'utf8')) : [];
+const leftoversAtStart = ledger.length; // accounts an earlier run did not get to delete
+const saveLedger = () => writeFileSync(LEDGER, JSON.stringify(ledger, null, 2));
+
 const stamp = Date.now();
-const testAccounts = []; // { email, password } to delete at the end
 function newAccount(tag) {
-  const account = { email: `tripsync.check.${stamp}.${tag}@example.com`, password: `Check-${crypto.randomUUID()}` };
-  testAccounts.push(account);
+  const account = { email: `tripsync.check.${stamp}.${tag}@example.com`, password: `Check-${crypto.randomUUID()}`, run: stamp };
+  ledger.push(account); // recorded before it exists, so even a crash cannot lose track of it
+  saveLedger();
   return account;
+}
+
+async function signIn(account) {
+  const res = await fetch(identity('signInWithPassword'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: account.email, password: account.password, returnSecureToken: true }),
+  });
+  return { ok: res.ok, data: await res.json() };
+}
+
+// Deletes one throwaway account from MongoDB and Firebase, then proves it is gone.
+// Returns 'deleted', or 'absent' if there was nothing to delete (sign-up never happened).
+async function removeAccount(account) {
+  const before = await signIn(account);
+  if (!before.ok) {
+    const code = before.data?.error?.message || 'unknown error';
+    // We know the password, so a refused login means there is no such account.
+    if (/^(INVALID_LOGIN_CREDENTIALS|EMAIL_NOT_FOUND)/.test(code)) return 'absent';
+    throw new Error(`could not log in to delete it (${code})`);
+  }
+  await users().deleteMany({ firebaseUid: before.data.localId });
+  await firebase('delete', { idToken: before.data.idToken });
+  const after = await signIn(account);
+  if (after.ok) throw new Error('it still logs in after accounts:delete');
+  return 'deleted';
+}
+
+// ---------- timing ----------
+const timings = [];
+async function timeRequests(label, send, times = 10) {
+  const ms = [];
+  const statuses = [];
+  for (let i = 0; i < times; i++) {
+    const started = performance.now();
+    const r = await send();
+    ms.push(Math.round(performance.now() - started));
+    statuses.push(r.status);
+  }
+  const sorted = [...ms].sort((a, b) => a - b);
+  timings.push({ label, times, min: sorted[0], median: sorted[Math.floor(times / 2)], max: sorted[times - 1] });
+  return statuses;
 }
 
 // ---------- API helper ----------
@@ -83,7 +139,7 @@ async function call(method, route, { token, body, rawBody, headers = {} } = {}) 
     body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined),
   });
   const data = await res.json().catch(() => null);
-  return { status: res.status, data };
+  return { status: res.status, data, headers: res.headers };
 }
 const hasError = (r) => typeof r.data?.error === 'string' && r.data.error.length > 0;
 
@@ -111,8 +167,19 @@ async function overflowOf(page) {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
 
+let apiToken = null; // the "api" test account's token, reused for timing
+
 try {
   await mongo.connect();
+
+  // The very first API request of the run. On Render's free plan this is the one
+  // that wakes the server if it was asleep, so it is timed on its own.
+  {
+    const started = performance.now();
+    const first = await call('GET', '/health/ping');
+    const ms = Math.round(performance.now() - started);
+    timings.push({ label: 'First request of the run, GET /api/health/ping', times: 1, min: ms, median: ms, max: ms, status: first.status });
+  }
 
   // ====================== 1. Public pages ======================
   section = 'Public pages';
@@ -173,6 +240,8 @@ try {
     record('GET /health reaches MongoDB', health.status === 200 && health.data?.mongo === 'connected', `HTTP ${health.status}`);
     const noRoute = await call('GET', '/no-such-route');
     record('Unknown API route gives 404 with { error }', noRoute.status === 404 && hasError(noRoute), `HTTP ${noRoute.status}`);
+    const cache = health.headers.get('cache-control');
+    record('API answers say "Cache-Control: no-store"', cache === 'no-store', `got "${cache}"`);
 
     const none = await call('GET', '/users/me');
     record('No token: 401', none.status === 401 && hasError(none), `HTTP ${none.status}`);
@@ -243,9 +312,25 @@ try {
 
     const docs = await users().find({ firebaseUid: uid }).toArray();
     record('MongoDB holds exactly one profile for this user', docs.length === 1 && docs[0].email === account.email && docs[0].createdAt instanceof Date, `${docs.length} document(s)`);
+    apiToken = token;
   }
 
-  // ====================== 4. Sign-up / log-in story in the browser ======================
+  // ====================== 4. Timing ======================
+  section = 'Timing';
+  {
+    const routes = [
+      ['GET /api/health/ping (no database)', () => call('GET', '/health/ping')],
+      ['GET /api/health (MongoDB ping)', () => call('GET', '/health')],
+      ['GET /api/users/me (token check + MongoDB read)', () => call('GET', '/users/me', { token: apiToken })],
+    ];
+    for (const [label, send] of routes) {
+      const statuses = await timeRequests(label, send);
+      const allOk = statuses.every((s) => s === 200);
+      record(`${label}: 10 of 10 answered 200`, allOk, `statuses ${statuses.join(',')}`);
+    }
+  }
+
+  // ====================== 5. Sign-up / log-in story in the browser ======================
   section = 'Browser story';
   {
     const account = newAccount('web');
@@ -349,20 +434,29 @@ try {
 } catch (err) {
   record('The check itself ran to the end', false, err.stack?.split('\n').slice(0, 2).join(' ') ?? String(err));
 } finally {
-  // Clean up: delete every throwaway Firebase account and its MongoDB profile.
+  // Clean up every account in the ledger: this run's, and any an earlier run left behind.
   section = 'Clean-up';
-  let removed = 0;
-  for (const account of testAccounts) {
+  const thisRun = ledger.filter((a) => a.run === stamp).length;
+  const outcome = { deleted: 0, absent: 0 };
+  for (const account of [...ledger]) {
     try {
-      const { idToken, localId } = await firebase('signInWithPassword', { ...account, returnSecureToken: true });
-      await users().deleteMany({ firebaseUid: localId });
-      await firebase('delete', { idToken });
-      removed++;
+      outcome[await removeAccount(account)]++;
+      ledger.splice(ledger.indexOf(account), 1);
     } catch (err) {
       record(`Delete test account ${account.email}`, false, err.message);
     }
   }
-  if (testAccounts.length) record(`Test accounts deleted from Firebase and MongoDB`, removed === testAccounts.length, `${removed}/${testAccounts.length}`);
+  saveLedger();
+  if (leftoversAtStart) {
+    record(`Accounts left by earlier runs: ${leftoversAtStart}, now cleaned up`, !ledger.some((a) => a.run !== stamp), `${ledger.length} still tracked`);
+  }
+  record(
+    `This run's ${thisRun} test accounts deleted from Firebase and MongoDB, each proved gone`,
+    ledger.length === 0,
+    `deleted ${outcome.deleted}, never created ${outcome.absent}, still tracked ${ledger.length}`,
+  );
+  const strayProfiles = await users().countDocuments({ email: /^tripsync\.check\./ }).catch(() => -1);
+  record('No test profiles left in MongoDB', strayProfiles === 0, `${strayProfiles} left`);
   await browser.close();
   await mongo.close();
 }
@@ -377,6 +471,13 @@ for (const r of results) {
     last = r.section;
   }
   console.log(`    ${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.ok ? '' : `  (${r.detail})`}`);
+}
+if (timings.length) {
+  console.log('\n  Time per request (measured from this PC, including the network)');
+  for (const t of timings) {
+    const numbers = t.times === 1 ? `${t.min} ms` : `min ${t.min} ms, median ${t.median} ms, max ${t.max} ms`;
+    console.log(`    ${t.label}: ${numbers}${t.status && t.status !== 200 ? ` (HTTP ${t.status})` : ''}`);
+  }
 }
 console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? '. Screenshots of failures are in checks/.artifacts' : ''}${saveLook ? '. Look screenshots are in checks/.artifacts' : ''}\n`);
 process.exit(failed.length ? 1 : 0);

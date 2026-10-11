@@ -149,7 +149,6 @@
   background: var(--stone);
   border: var(--line);
   border-radius: var(--radius-sm);
-  box-shadow: 6px 6px 0 var(--ink);
 }
 
 .ledgerNote {
