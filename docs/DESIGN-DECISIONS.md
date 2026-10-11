@@ -229,7 +229,16 @@ Data choices:
 - Changing dates rewrites the days list inside MongoDB in one update (keep the days still inside the range, add new empty ones, renumber), never load-change-save, so stops another member adds meanwhile survive.
 - A stranger gets 403 on a trip that exists and 404 on one that does not.
 
+## When an outside service refuses (Step 10)
+
+- The forecast, the town search and the place searches depend on services TripSync does not control. When one refuses, only the box that needs it says so, in plain words, and the rest of the trip keeps working (this was designed in Steps 4 and 7 and is how the live site behaves today).
+- The words name the service and what it replied: "The weather service could not answer this time. It replied HTTP 429: Daily API request limit exceeded. Please try again tomorrow." When the service explains itself, its advice replaces ours (ours said "try again in a minute", which contradicted it). The service's own text is shown only for Open-Meteo, whose refusal reasons are public; Geoapify's text is never shown, because its errors can mention keys.
+- A failing outside service answers HTTP 503, not 502. Measured on the live site: a 502 from the API came out of Cloudflare as its own grey HTML "Bad gateway" page, which the website cannot read. The 503 arrives as the API's JSON.
+- One retry, after a short pause, on 429, 5xx or no answer. Nothing is retried on a plain refusal such as 401 or 404.
+
 ## Change log
+
+- 2026-10-12, Step 10: outside-service failures now say what the service replied (503, not 502). No visual change; the existing warning board and "Try again" buttons carry the new wording.
 
 - 2026-10-12, Step 9.5: no design change. Fixed one flash on the Money tab: clearing the bill filters no longer shows the "No bills yet" message while the full list loads.
 

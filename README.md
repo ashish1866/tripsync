@@ -52,6 +52,7 @@ The Render address is a setting (`API_ORIGIN` in `server/wrangler.jsonc`), not w
 Things on the live setup that are worth knowing:
 
 - **Speed:** see "Measured speed" at the end of this file.
+- **The forecast depends on Open-Meteo accepting Render's address.** Render's free plan shares its outgoing addresses between many customers, and Open-Meteo's free service limits each address per day. On 2026-10-12 it answered "Daily API request limit exceeded. Please try again tomorrow." to Render. When that happens the weather box says so, with Open-Meteo's own words, and the rest of the trip works. The forecast works normally from any other address (this PC, for example). Town search and Geoapify places were not affected.
 - **Sleeping:** Render's free plan sleeps after 15 quiet minutes. The Worker's Cron Trigger pings `/api/health/ping` every 10 minutes to keep it awake (results are in the Worker's logs). If it does sleep, the first request takes about a minute and the site shows "not answering, try again in a minute".
 - **Outside services:** the forecast (Open-Meteo, cached 3 hours per town) and the place searches (Geoapify, cached 7 days) can fail on their own. When they do, only the weather box or the results list shows an error; the rest of the trip keeps working.
 
@@ -141,4 +142,13 @@ The visual decisions and the reasons for them are in `docs/DESIGN-DECISIONS.md`.
 
 ## Measured speed
 
-(filled in after the live check)
+Measured with `npm run check -- --live` from Ashish's PC on 2026-10-12 (median of 10 requests each, including the network; the website is served from Cloudflare, so a request goes PC ? Cloudflare (Marseille on this connection) ? Render in Singapore ? MongoDB in Mumbai and back):
+
+| Request | Through the live site | Same API on this PC |
+|---|---|---|
+| `GET /api/health/ping` (no database) | 326 ms (min 303, max 410) | 5 ms |
+| `GET /api/health` (MongoDB ping) | 376 ms (min 371, max 434) | 42 ms |
+| `GET /api/users/me` (token check + a MongoDB read) | 418 ms (min 369, max 1157) | 44 ms |
+| First request of the run | 1,168 ms | 27 ms |
+
+Almost all of the live time is the journey, not the work: the database read adds about 50 to 90 ms to a bare ping. Calling Render directly (not through the Worker) took about 0.19 s when measured on 2026-10-11.
