@@ -949,11 +949,21 @@ async function weatherChecks(ctx) {
   const stranger = await ctx.newUser('wxstranger', 'Ankit Check');
   const trip = await makeTrip(ctx, owner, { start: 3, days: 4 });
 
+  // Open-Meteo is the main forecast; Visual Crossing and OpenWeather are backups for when it
+  // refuses (it refuses Render's shared address on some days). Every check below holds for
+  // whichever one answered, and the report says which.
+  const PROVIDERS = ['open-meteo', 'visualcrossing', 'openweather'];
+
   await cache.deleteMany({ key: KEY });
   const first = await call('GET', `/trips/${trip.id}/weather`, { token: owner.token });
   const w1 = first.data?.weather;
   const allForecast = w1?.days?.length === 4 && w1.days.every((d) => d.status === 'forecast' && typeof d.label === 'string' && 'rainChance' in d);
-  record('First visit asks Open-Meteo and gives a forecast for all 4 days', first.status === 200 && w1?.source === 'open-meteo' && allForecast, `HTTP ${first.status} ${first.data?.error ?? `source ${w1?.source}, ${w1?.days?.map((d) => d.status).join(',')}`}`);
+  record(`First visit asks a forecast service (this run: ${w1?.provider ?? 'none'}) and gives a forecast for all 4 days`, first.status === 200 && PROVIDERS.includes(w1?.source) && allForecast, `HTTP ${first.status} ${first.data?.error ?? `source ${w1?.source}, ${w1?.days?.map((d) => d.status).join(',')}`}`);
+  record(
+    'It says honestly which service answered, and marks a backup as a fallback',
+    PROVIDERS.includes(w1?.provider) && w1.source === w1.provider && w1.fellBack === (w1.provider !== 'open-meteo'),
+    `provider ${w1?.provider}, source ${w1?.source}, fellBack ${w1?.fellBack}`,
+  );
   record('Temperatures are whole numbers from the forecast', w1?.days?.every((d) => Number.isInteger(d.max) && Number.isInteger(d.min) && d.max >= d.min), JSON.stringify(w1?.days?.map((d) => [d.max, d.min])));
   const doc = await cache.findOne({ key: KEY });
   record(`The forecast is stored in weatherCache under "${KEY}"`, doc && Array.isArray(doc.data?.daily?.time) && doc.createdAt instanceof Date, doc ? `${doc.data?.daily?.time?.length} days stored` : 'no document');
@@ -961,7 +971,7 @@ async function weatherChecks(ctx) {
   const second = await call('GET', `/trips/${trip.id}/weather`, { token: owner.token });
   const docAfter = await cache.findOne({ key: KEY });
   record(
-    'Second visit uses the cache: no Open-Meteo call, same check time, one cache entry',
+    'Second visit uses the cache: no forecast call, same check time, one cache entry',
     second.data?.weather?.source === 'cache' && second.data.weather.fetchedAt === w1?.fetchedAt && docAfter?.createdAt?.getTime() === doc?.createdAt?.getTime() && (await cache.countDocuments({ key: KEY })) === 1,
     `source ${second.data?.weather?.source}, fetchedAt ${second.data?.weather?.fetchedAt} vs ${w1?.fetchedAt}`,
   );
@@ -973,16 +983,17 @@ async function weatherChecks(ctx) {
   // An old entry (over 3 hours) is not used, even before MongoDB's TTL clean-up removes it
   await cache.updateOne({ key: KEY }, { $set: { createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000 - 60_000) } });
   const stale = await call('GET', `/trips/${trip.id}/weather`, { token: owner.token });
-  record('An entry older than 3 hours is refreshed from Open-Meteo (age checked in code)', stale.data?.weather?.source === 'open-meteo', `source ${stale.data?.weather?.source}`);
+  record('An entry older than 3 hours is refreshed from a forecast service (age checked in code)', PROVIDERS.includes(stale.data?.weather?.source), `source ${stale.data?.weather?.source}`);
 
   const far = await makeTrip(ctx, owner, { name: 'Manali in winter', start: 40, days: 3 });
   const farW = await call('GET', `/trips/${far.id}/weather`, { token: owner.token });
-  record('A trip 40 days away: every day "later", and Open-Meteo is not asked', farW.status === 200 && farW.data.weather.source === 'none' && farW.data.weather.days.every((d) => d.status === 'later' && !('max' in d)), `source ${farW.data?.weather?.source}, ${farW.data?.weather?.days?.map((d) => d.status).join(',')}`);
-  // A trip that runs past the forecast's last day. Which day that is depends on
-  // Open-Meteo (near midnight its 16 days can still start yesterday), so the
-  // expected answer is read from the forecast actually stored.
+  record('A trip 40 days away: every day "later", and no forecast service is asked', farW.status === 200 && farW.data.weather.source === 'none' && farW.data.weather.days.every((d) => d.status === 'later' && !('max' in d)), `source ${farW.data?.weather?.source}, ${farW.data?.weather?.days?.map((d) => d.status).join(',')}`);
+  // A trip that runs past the forecast's last day. Which day that is depends on the
+  // service that answered (16, 15 or 5 days; near midnight the days can still start
+  // yesterday), so the trip is placed around the last day actually stored.
   const lastForecast = (await cache.findOne({ key: KEY }))?.data?.daily?.time?.at(-1);
-  const edge = await makeTrip(ctx, owner, { name: 'Manali at the edge', start: 13, days: 6 });
+  const toLast = lastForecast ? Math.round((Date.parse(`${lastForecast}T00:00:00Z`) - Date.parse(`${dayFromToday(0)}T00:00:00Z`)) / 86_400_000) : 13;
+  const edge = await makeTrip(ctx, owner, { name: 'Manali at the edge', start: Math.max(0, toLast - 1), days: 4 });
   const edgeW = await call('GET', `/trips/${edge.id}/weather`, { token: owner.token });
   const edgeStatus = edgeW.data?.weather?.days?.map((d) => d.status).join(',');
   const expected = edge.days.map((d) => (d.date <= lastForecast ? 'forecast' : 'later')).join(',');
@@ -1005,9 +1016,17 @@ async function weatherChecks(ctx) {
   const tripUrl = `${ctx.base}/trips/${webTrip.id}`;
 
   await page.goto(tripUrl, { waitUntil: 'networkidle' });
-  const sourceLine = await page.getByText(/Forecast from Open-Meteo, checked at/).waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const SOURCE_LINE = /Forecast from (Open-Meteo|Visual Crossing|OpenWeather)/;
+  const sourceLine = await page.getByText(SOURCE_LINE).waitFor({ timeout: 15000 }).then(() => true, () => false);
   const stoneText = (await page.getByRole('list', { name: 'Days of the trip' }).innerText()).replace(/\s+/g, ' ');
   record('The overview shows the forecast on every day stone and says where it is from', sourceLine && (stoneText.match(/°/g) || []).length >= 8 && (stoneText.match(/Rain (\d+%|chance not given)/g) || []).length === 4, stoneText.slice(0, 200));
+  // The screen names the service that really answered (read from the cache this trip shares),
+  // and Visual Crossing's required credit is shown exactly when Visual Crossing answered.
+  const answered = (await cache.findOne({ key: KEY }))?.data?.provider ?? 'open-meteo';
+  const NAME = { 'open-meteo': 'Open-Meteo', visualcrossing: 'Visual Crossing', openweather: 'OpenWeather' }[answered];
+  const namedRight = (await page.getByText(`Forecast from ${NAME}`).count()) === 1;
+  const credit = await page.getByRole('link', { name: 'Powered by Visual Crossing Weather' }).count();
+  record(`The weather box names the service that answered (${NAME}), with the Visual Crossing credit only when it answered`, namedRight && credit === (answered === 'visualcrossing' ? 1 : 0), `named ${namedRight}, ${credit} credit links`);
   if (ctx.saveLook) await ctx.shot(page, 'weather-overview');
 
   // Rain warning: the rule is checked with a planted forecast, since real rain cannot be ordered
@@ -1043,7 +1062,7 @@ async function weatherChecks(ctx) {
   record('Weather failing: only the weather box shows an error; name, day stones and map still work', boxError === 1 && stillThere, `${boxError} weather errors, rest ${stillThere ? 'fine' : 'broken'}`);
   await page.unroute('**/api/trips/*/weather');
   await page.getByRole('button', { name: 'Try the forecast again' }).click();
-  const recovered = await page.getByText(/Forecast from Open-Meteo, checked at/).waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const recovered = await page.getByText(SOURCE_LINE).waitFor({ timeout: 15000 }).then(() => true, () => false);
   record('"Try the forecast again" brings the forecast back', recovered);
 
   const farTrip = await makeTrip(ctx, traveller, { name: 'Manali in winter', start: 40, days: 3 });

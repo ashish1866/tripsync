@@ -76,7 +76,7 @@ To try the Cloudflare Worker locally as well, keep `npm run dev` running and run
 `npm.cmd run seed` loads a ready-made "Manali Trip" so the demo starts with real-looking data: four days, 12 stops (10 with a real map point: Hadimba Devi Temple, Solang Valley, Jogini Falls and others; the last day's checkout and bus have none, on purpose), a Rs 45,000 budget, 14 bills (hotel, Volvo tickets, cabs, paragliding, food, with equal and exact splits), one payment already marked as paid, and a packing list that is 5 of 8 packed.
 
 1. Open the website and sign up or log in with the account that should own the trip. (This creates your profile, which the seed needs.)
-2. Load the trip: `npm.cmd run seed -- --owner your@email.com`
+2. Load the trip: `npm.cmd run seed -- --owner your@email.com` (on this PC, into `tripsync_dev`), or for the live site `npm.cmd run seed -- --owner your@email.com --db tripsync`
 3. Log in as that account. "Manali Trip" is on Your trips.
 
 Options (after `--`): `--db NAME` loads into another database, `--start 2026-10-20` sets the first day (default: three days from today, so the forecast shows), `--remove` takes the demo trip and its demo friends out again. Running it again replaces the earlier demo trip and never touches your other trips. Run it against the same database the API uses (the one in `server/.dev.vars`, or `MONGODB_DB` on Render).
@@ -108,7 +108,7 @@ The group is you (owner), plus Rahul and Ankit (editors) and Rohan (viewer). The
 
 - **API:** pushing to `main` redeploys it on Render by itself (when something in `server/` changed). After changing a server dependency, run `npm.cmd run lock:server` and commit `server/package-lock.json`, because Render installs from that file.
 - **Website and Worker:** `npm.cmd run deploy` builds the website and uploads it with the Worker.
-- **Database:** the API uses the database named by `MONGODB_DB` (`tripsync_dev` in `render.yaml`). The `tripsync_app` Atlas user can also use a database named `tripsync` (tested), so a separate demo database only needs `MONGODB_DB` changed on Render, `npm.cmd run setup-db` run against it, and the seed loaded into it.
+- **Databases:** one Atlas cluster, two databases. The **live site uses `tripsync`** (`MONGODB_DB` in `render.yaml` and on Render). **Development and the local check use `tripsync_dev`** (`server/.dev.vars`). Test data never reaches the live database except during `npm run check -- --live`, which wipes it again at the end. To set up indexes in the live database: `$env:MONGODB_DB='tripsync'; npm.cmd run setup-db`. The check asks the API which database it uses (`/api/health`), so it always inspects the right one.
 
 ## API
 

@@ -157,14 +157,17 @@ async function call(method, route, { token, body, rawBody, headers = {} } = {}) 
 const hasError = (r) => typeof r.data?.error === 'string' && r.data.error.length > 0;
 
 const mongo = new MongoClient(serverEnv.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
-const DB_NAME = dbArg ? dbArg.slice('--db='.length) : serverEnv.MONGODB_DB || 'tripsync_dev';
+// The database the check looks at directly. It MUST be the one the API under test uses,
+// so at the start of the run the API is asked (GET /api/health says its database) and
+// that answer is used. --db=NAME is only a fallback for when the API cannot be asked.
+const LOCAL_DB = serverEnv.MONGODB_DB || 'tripsync_dev';
+let DB_NAME = dbArg ? dbArg.slice('--db='.length) : LOCAL_DB;
 const mongoDb = () => mongo.db(DB_NAME);
 const users = () => mongoDb().collection('users');
 
 // Everything a throwaway account left in MongoDB: its profile, the trips it
 // owns (with their expenses and invites), and its place in other trips.
-async function removeUserData(uid) {
-  const db = mongoDb();
+async function removeUserData(uid, db = mongoDb()) {
   const owned = await db.collection('trips').find({ owner: uid }, { projection: { _id: 1 } }).toArray();
   const ids = owned.map((t) => t._id);
   if (ids.length) {
@@ -174,7 +177,7 @@ async function removeUserData(uid) {
   }
   await db.collection('trips').updateMany({ 'members.uid': uid }, { $pull: { members: { uid } } });
   await db.collection('expenses').deleteMany({ createdBy: uid });
-  await users().deleteMany({ firebaseUid: uid });
+  await db.collection('users').deleteMany({ firebaseUid: uid });
 }
 
 // ---------- the fixed pool of test accounts ----------
@@ -267,16 +270,30 @@ async function limiter() {
 
 // Wipes everything the pool left in MongoDB. Finds the accounts by their email in
 // the profiles, so it needs no Firebase call. Returns how many profiles it found.
-async function wipePool() {
-  const rows = await users().find({ email: POOL_EMAIL }, { projection: { firebaseUid: 1 } }).toArray();
-  for (const row of rows) await removeUserData(row.firebaseUid);
+async function wipePool(db = mongoDb()) {
+  const rows = await db.collection('users').find({ email: POOL_EMAIL }, { projection: { firebaseUid: 1 } }).toArray();
+  for (const row of rows) await removeUserData(row.firebaseUid, db);
   return rows.length;
 }
 
+// The database an API says it uses (GET /api/health), or null if it cannot be asked.
+async function databaseOf(siteBase) {
+  try {
+    const res = await fetch(`${siteBase}/api/health`, { signal: AbortSignal.timeout(90_000) });
+    const data = await res.json();
+    return typeof data?.database === 'string' && data.database ? data.database : null;
+  } catch {
+    return null;
+  }
+}
+
 // npm run check -- --delete-pool : removes every pool account from Firebase and MongoDB, proves it, and forgets the file.
+// The pool's data is wiped from every database it could be in: this PC's, the live site's, and --db.
 async function deletePool() {
   await mongo.connect();
-  const wiped = await wipePool();
+  const names = [...new Set([LOCAL_DB, DB_NAME, await databaseOf(LIVE_URL)].filter(Boolean))];
+  let wiped = 0;
+  for (const name of names) wiped += await wipePool(mongo.db(name));
   const outcome = [];
   for (const [key, rec] of Object.entries(pool)) {
     try {
@@ -287,8 +304,9 @@ async function deletePool() {
     }
   }
   savePool();
-  const stray = await users().countDocuments({ email: /^tripsync\.check\./ });
-  console.log(`Pool removal: ${wiped} profiles wiped; ${outcome.join('; ') || 'no accounts in the pool file'}`);
+  let stray = 0;
+  for (const name of names) stray += await mongo.db(name).collection('users').countDocuments({ email: /^tripsync\.check\./ });
+  console.log(`Pool removal (databases ${names.join(', ')}): ${wiped} profiles wiped; ${outcome.join('; ') || 'no accounts in the pool file'}`);
   console.log(`Accounts still in the pool file: ${Object.keys(pool).length}. Test profiles still in MongoDB: ${stray}.`);
   await mongo.close();
   process.exit(Object.keys(pool).length === 0 && stray === 0 ? 0 : 1);
@@ -353,14 +371,6 @@ let apiToken = null; // the "api" test account's token, reused for timing
 try {
   await mongo.connect();
 
-  // The fixed test accounts start every run with no data at all.
-  section = 'Test accounts';
-  {
-    const wiped = await wipePool();
-    const left = await users().countDocuments({ email: POOL_EMAIL });
-    record(`The fixed test accounts start clean: their data wiped (${wiped} profiles found)`, left === 0, `${left} profiles left`);
-  }
-
   // The very first API request of the run. On Render's free plan this is the one
   // that wakes the server if it was asleep, so it is timed on its own.
   {
@@ -368,6 +378,25 @@ try {
     const first = await call('GET', '/health/ping');
     const ms = Math.round(performance.now() - started);
     timings.push({ label: 'First request of the run, GET /api/health/ping', times: 1, min: ms, median: ms, max: ms, status: first.status });
+  }
+
+  section = 'Test accounts';
+  // Look at the database the API under test really uses (it says so), never a guess.
+  {
+    const reported = await databaseOf(base);
+    const asked = dbArg ? dbArg.slice('--db='.length) : null;
+    if (reported) DB_NAME = reported;
+    record(
+      `The check looks at the database the API uses: ${DB_NAME}`,
+      Boolean(reported) && (!asked || asked === reported),
+      reported ? `--db=${asked} was given, but the API uses ${reported}` : `the API did not say which database it uses; using ${DB_NAME}`,
+    );
+  }
+  // The fixed test accounts start every run with no data at all.
+  {
+    const wiped = await wipePool();
+    const left = await users().countDocuments({ email: POOL_EMAIL });
+    record(`The fixed test accounts start clean: their data wiped (${wiped} profiles found)`, left === 0, `${left} profiles left`);
   }
 
   // ====================== 1. Public pages ======================

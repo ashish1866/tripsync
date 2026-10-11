@@ -21,7 +21,7 @@ services:
       - key: FIREBASE_PROJECT_ID
         value: tripsync-d3e9b # public: it only names our Firebase project
       - key: MONGODB_DB
-        value: tripsync_dev
+        value: tripsync # the live site's own database; development and the local check use tripsync_dev (server/.dev.vars)
       - key: MONGODB_URI
         sync: false # secret: typed into Render's dashboard
       - key: GEOAPIFY_KEY
