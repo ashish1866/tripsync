@@ -1,0 +1,223 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.group,
+.invites {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.heading {
+  font-size: var(--text-xl);
+  margin: 0;
+}
+
+.subheading {
+  font-size: var(--text-lg);
+  margin: var(--space-2) 0 0;
+}
+
+/* The group: a route board, one row per person */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.member {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: var(--space-4);
+}
+
+.member + .member {
+  border-top: var(--line-thin);
+}
+
+.who {
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+
+.you {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border: var(--line-thin);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  vertical-align: 0.15em;
+}
+
+.role {
+  margin: var(--space-1) 0 0;
+}
+
+.roleName {
+  display: inline-block;
+  margin-right: var(--space-1);
+  padding: 0 var(--space-2);
+  background: var(--ink);
+  color: var(--stone);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  font-size: var(--text-sm);
+}
+
+.since {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.memberActions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.small {
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.ownerNote {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+/* Leaving: the red band of a warning sign, like deleting a trip */
+.leave {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-5);
+  background: var(--stone);
+  border: var(--line);
+  border-top: 8px solid var(--signal);
+  border-radius: var(--radius-sm);
+}
+
+.leave p,
+.leave h3 {
+  margin: 0;
+}
+
+/* The owner's invite board, with the identity-yellow band */
+.invites {
+  justify-items: start;
+  padding: var(--space-5);
+  background: var(--stone);
+  border: var(--line);
+  border-top: 8px solid var(--cap);
+  border-radius: var(--radius-sm);
+}
+
+.invites > * {
+  max-width: 100%;
+}
+
+.invites > fieldset {
+  width: 100%;
+}
+
+.lead,
+.none {
+  margin: 0;
+}
+
+.none {
+  color: var(--ink-muted);
+}
+
+.problem {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.inviteList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.invite {
+  padding: var(--space-3) var(--space-4);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--ground);
+}
+
+/* The code, painted large so it can be read out over a phone call */
+.code {
+  margin: 0;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  font-size: var(--text-2xl);
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.inviteMeta {
+  margin: var(--space-1) 0 0;
+}
+
+.link {
+  margin: var(--space-1) 0 var(--space-3);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.inviteActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 56rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 34rem) {
+  .member {
+    flex-direction: column;
+  }
+
+  .memberActions {
+    flex-direction: row;
+  }
+
+  .invites,
+  .leave {
+    padding: var(--space-4);
+  }
+}

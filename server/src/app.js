@@ -5,6 +5,7 @@ import healthRoutes from './routes/health.js';
 import userRoutes from './routes/users.js';
 import tripRoutes from './routes/trips.js';
 import geoRoutes from './routes/geo.js';
+import inviteRoutes from './routes/invites.js';
 
 // Builds the Express app (the TripSync API).
 // server.js starts it: on Render in production, on this PC for `npm run dev`.
@@ -28,6 +29,9 @@ export function createApp() {
   app.use('/api/users', requireAuth, userRoutes);
   app.use('/api/trips', requireAuth, tripRoutes);
   app.use('/api/geo', requireAuth, geoRoutes);
+
+  // Invites: the preview is public, joining checks the token itself (see routes/invites.js).
+  app.use('/api/invites', inviteRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

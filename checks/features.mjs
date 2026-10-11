@@ -31,7 +31,228 @@ export async function addMember(ctx, tripId, user, role) {
   await ctx.db.collection('trips').updateOne({ _id: new ObjectId(tripId) }, { $push: { members: { uid: user.uid, role, joinedAt: new Date() } } });
 }
 
-const sections = [tripsChecks, itineraryChecks, weatherChecks];
+const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks];
+
+// Write routes that exist so far, each with a body that would be valid for an owner.
+// Later steps add their own routes to the viewer check in their sections.
+function writeRoutes(tripId, { actId, otherUid, code }) {
+  const t = `/trips/${tripId}`;
+  return [
+    ['PATCH', t, { name: 'Renamed' }],
+    ['DELETE', t],
+    ['POST', `${t}/days/1/activities`, { title: 'Viewer stop' }],
+    ['PATCH', `${t}/activities/${actId}`, { title: 'Viewer edit' }],
+    ['DELETE', `${t}/activities/${actId}`],
+    ['POST', `${t}/invites`, { role: 'editor' }],
+    ['GET', `${t}/invites`],
+    ['DELETE', `${t}/invites/${code}`],
+    ['PATCH', `${t}/members/${otherUid}`, { role: 'viewer' }],
+    ['DELETE', `${t}/members/${otherUid}`],
+  ];
+}
+
+// ====================== Step 5: members and roles ======================
+async function membersChecks(ctx) {
+  const { call, record, hasError, db } = ctx;
+  ctx.setSection('Members API');
+
+  const owner = await ctx.newUser('mowner', 'Ashish Members');
+  const dhruv = await ctx.newUser('mdhruv', 'Dhruv Members');
+  const rohan = await ctx.newUser('mrohan', 'Rohan Members');
+  const stranger = await ctx.newUser('mstranger', 'Ankit Members');
+  const trip = await makeTrip(ctx, owner);
+  const t = `/trips/${trip.id}`;
+  const tripObjectId = new ObjectId(trip.id);
+
+  // Making invites
+  const made = await call('POST', `${t}/invites`, { token: owner.token, body: { role: 'editor' } });
+  const inv = made.data?.invite;
+  const days7 = inv && Math.round((Date.parse(inv.expiresAt) - Date.parse(inv.createdAt)) / 86_400_000);
+  record('Owner makes an Editor invite: 201, an 8-character code, valid 7 days', made.status === 201 && /^[A-Z2-9]{8}$/.test(inv?.code) && inv.role === 'editor' && days7 === 7, `HTTP ${made.status} ${JSON.stringify(inv)}`);
+  const badRole = await call('POST', `${t}/invites`, { token: owner.token, body: { role: 'owner' } });
+  record('An invite for the role "owner": 400', badRole.status === 400 && hasError(badRole), `HTTP ${badRole.status}`);
+  const strangerInvite = await call('POST', `${t}/invites`, { token: stranger.token, body: { role: 'editor' } });
+  record('A stranger making an invite: 403', strangerInvite.status === 403, `HTTP ${strangerInvite.status}`);
+
+  // Preview (the one public route)
+  const preview = await call('GET', `/invites/${inv?.code}`);
+  const p = preview.data?.invite;
+  record('Invite preview works without logging in: trip name, owner name, role', preview.status === 200 && p?.trip?.name === 'Manali Trip' && p.trip.ownerName === 'Ashish Members' && p.role === 'editor', `HTTP ${preview.status} ${preview.data?.error ?? ''}`);
+  record('The preview shows no member names and no money', p && !('members' in p.trip) && !('budget' in p.trip) && typeof p.trip.memberCount === 'number', JSON.stringify(p?.trip));
+  const lower = await call('GET', `/invites/${inv?.code.toLowerCase()}`);
+  record('A code typed in small letters still works', lower.status === 200, `HTTP ${lower.status}`);
+  const garbled = await call('GET', '/invites/not-a-code!');
+  record('A badly shaped code: 400', garbled.status === 400 && hasError(garbled), `HTTP ${garbled.status}`);
+  const unknown = await call('GET', '/invites/ZZZZ2222');
+  record('A code that does not exist: 404', unknown.status === 404 && hasError(unknown), `HTTP ${unknown.status}`);
+
+  // Joining
+  const noToken = await call('POST', `/invites/${inv?.code}/join`);
+  record('Joining without logging in: 401', noToken.status === 401, `HTTP ${noToken.status}`);
+  const joined = await call('POST', `/invites/${inv?.code}/join`, { token: dhruv.token });
+  const dhruvTrip = await call('GET', t, { token: dhruv.token });
+  record('A second account joins with the code: 201, and is an editor', joined.status === 201 && joined.data.tripId === trip.id && dhruvTrip.data?.trip?.myRole === 'editor', `HTTP ${joined.status} ${joined.data?.error ?? ''}`);
+  const twice = await call('POST', `/invites/${inv?.code}/join`, { token: dhruv.token });
+  record(`Joining twice: 409 "You're already in this trip."`, twice.status === 409 && twice.data?.error === "You're already in this trip.", `HTTP ${twice.status} ${twice.data?.error}`);
+  const ownerJoin = await call('POST', `/invites/${inv?.code}/join`, { token: owner.token });
+  record('The owner opening their own invite: already in the trip (409)', ownerJoin.status === 409, `HTTP ${ownerJoin.status}`);
+  const [r1, r2] = await Promise.all([1, 2].map(async () => {
+    const v = await call('POST', `${t}/invites`, { token: owner.token, body: { role: 'viewer' } });
+    return v.data.invite.code;
+  }));
+  const [ja, jb] = await Promise.all([call('POST', `/invites/${r1}/join`, { token: rohan.token }), call('POST', `/invites/${r2}/join`, { token: rohan.token })]);
+  const rohanCount = (await db.collection('trips').findOne({ _id: tripObjectId })).members.filter((m) => m.uid === rohan.uid).length;
+  record('Joining with two codes at the same moment adds the person once, as a viewer', rohanCount === 1 && [ja.status, jb.status].sort().join(',') === '201,409', `${rohanCount} entries, HTTP ${ja.status}/${jb.status}`);
+
+  // Expiry checked in code (the TTL clean-up runs only once a minute)
+  const old = 'EXP' + String(Date.now()).slice(-5).replace(/[01]/g, '7');
+  await db.collection('invites').insertOne({ code: old, tripId: tripObjectId, role: 'viewer', createdBy: owner.uid, createdAt: new Date(Date.now() - 7 * 86_400_000 - 5_000) });
+  const expiredPreview = await call('GET', `/invites/${old}`);
+  const expiredJoin = await call('POST', `/invites/${old}/join`, { token: stranger.token });
+  record('An invite older than 7 days: "This invite has expired, ask the owner for a new one." (410)', expiredPreview.status === 410 && expiredPreview.data?.error === 'This invite has expired, ask the owner for a new one.' && expiredJoin.status === 410, `HTTP ${expiredPreview.status}/${expiredJoin.status} ${expiredPreview.data?.error}`);
+  const strangerStill = await call('GET', t, { token: stranger.token });
+  record('...and nobody joined with it', strangerStill.status === 403, `HTTP ${strangerStill.status}`);
+
+  const list = await call('GET', `${t}/invites`, { token: owner.token });
+  record('The owner sees the working invites, not the expired one', list.status === 200 && list.data.invites.length === 3 && !list.data.invites.some((i) => i.code === old), `${list.data?.invites?.length} invites`);
+  const revoked = await call('DELETE', `${t}/invites/${r1}`, { token: owner.token });
+  const afterRevoke = await call('GET', `/invites/${r1}`);
+  record('The owner stops a link: it no longer opens (404)', revoked.status === 200 && afterRevoke.status === 404, `HTTP ${revoked.status} then ${afterRevoke.status}`);
+
+  // A viewer is refused on every write route
+  const stop = await call('POST', `${t}/days/1/activities`, { token: owner.token, body: { title: 'Hadimba Devi Temple' } });
+  const routes = writeRoutes(trip.id, { actId: stop.data?.activity?.id, otherUid: dhruv.uid, code: r2 });
+  const viewerResults = [];
+  for (const [method, route, body] of routes) {
+    const r = await call(method, route, { token: rohan.token, body });
+    viewerResults.push(`${method} ${route.replace(t, '')}: ${r.status}`);
+    record(`Viewer ${method} ${route.replace(t, '') || '/trips/:id'}: 403`, r.status === 403 && hasError(r), `HTTP ${r.status} ${r.data?.error ?? ''}`);
+  }
+  const intact = await call('GET', t, { token: owner.token });
+  record('...and the trip is unchanged afterwards', intact.data?.trip?.name === 'Manali Trip' && intact.data.trip.days[0].activities.length === 1 && intact.data.trip.members.length === 3, JSON.stringify(intact.data?.trip?.members?.map((m) => m.role)));
+  const editorOwnerOnly = await call('POST', `${t}/invites`, { token: dhruv.token, body: { role: 'viewer' } });
+  record('An editor making an invite (owner only): 403', editorOwnerOnly.status === 403, `HTTP ${editorOwnerOnly.status}`);
+
+  // Roles
+  const demote = await call('PATCH', `${t}/members/${dhruv.uid}`, { token: owner.token, body: { role: 'viewer' } });
+  const demotedAdd = await call('POST', `${t}/days/1/activities`, { token: dhruv.token, body: { title: 'After demotion' } });
+  record('Owner makes the editor a viewer; their next stop is refused (403)', demote.status === 200 && demotedAdd.status === 403, `HTTP ${demote.status} then ${demotedAdd.status}`);
+  const promote = await call('PATCH', `${t}/members/${dhruv.uid}`, { token: owner.token, body: { role: 'editor' } });
+  record('...and back to editor: 200', promote.status === 200 && promote.data.trip.members.find((m) => m.uid === dhruv.uid).role === 'editor', `HTTP ${promote.status}`);
+  const ownRole = await call('PATCH', `${t}/members/${owner.uid}`, { token: owner.token, body: { role: 'viewer' } });
+  record("Changing the owner's role: 400", ownRole.status === 400 && hasError(ownRole), `HTTP ${ownRole.status}`);
+  const ownerLeaves = await call('DELETE', `${t}/members/${owner.uid}`, { token: owner.token });
+  record('The owner cannot leave (403, with the reason)', ownerLeaves.status === 403 && /delete the trip/i.test(ownerLeaves.data?.error), `HTTP ${ownerLeaves.status} ${ownerLeaves.data?.error}`);
+  const editorRemoves = await call('DELETE', `${t}/members/${rohan.uid}`, { token: dhruv.token });
+  record('An editor removing someone else: 403', editorRemoves.status === 403, `HTTP ${editorRemoves.status}`);
+
+  // Someone who owes money cannot be removed or leave
+  await db.collection('expenses').insertOne({ tripId: tripObjectId, title: 'Cab to Solang', amount: 300000, category: 'transport', paidBy: owner.uid, date: dayFromToday(5), createdBy: owner.uid, type: 'expense', splits: [{ uid: owner.uid, share: 150000 }, { uid: rohan.uid, share: 150000 }], createdAt: new Date() });
+  const blocked = await call('DELETE', `${t}/members/${rohan.uid}`, { token: owner.token });
+  record('Removing a member who still owes Rs 1,500: 409 with the amount', blocked.status === 409 && /still owes Rs 1,500/.test(blocked.data?.error), `HTTP ${blocked.status} ${blocked.data?.error}`);
+  const blockedLeave = await call('DELETE', `${t}/members/${rohan.uid}`, { token: rohan.token });
+  record('...and they cannot leave either until they settle', blockedLeave.status === 409 && /You still owe Rs 1,500/.test(blockedLeave.data?.error), `HTTP ${blockedLeave.status} ${blockedLeave.data?.error}`);
+  await db.collection('expenses').insertOne({ tripId: tripObjectId, title: 'Settle up', amount: 150000, category: 'other', paidBy: rohan.uid, date: dayFromToday(5), createdBy: rohan.uid, type: 'settlement', splits: [{ uid: owner.uid, share: 150000 }], createdAt: new Date() });
+  const removed = await call('DELETE', `${t}/members/${rohan.uid}`, { token: owner.token });
+  const rohanAfter = await call('GET', t, { token: rohan.token });
+  record('Once settled, the owner removes them: 200, and they get 403 on the trip', removed.status === 200 && rohanAfter.status === 403, `HTTP ${removed.status} then ${rohanAfter.status}`);
+  const left = await call('DELETE', `${t}/members/${dhruv.uid}`, { token: dhruv.token });
+  const dhruvAfter = await call('GET', t, { token: dhruv.token });
+  record('A member leaves on their own: 200, then 403', left.status === 200 && left.data?.left === true && dhruvAfter.status === 403, `HTTP ${left.status} then ${dhruvAfter.status}`);
+
+  // Rate limits, counted per account
+  const guesser = await ctx.newUser('mguesser', 'Guess Limit');
+  const statuses = [];
+  for (let i = 0; i < 11; i++) statuses.push((await call('POST', `/invites/ZZZZ${String(2222 + i).replace(/[01]/g, '9')}/join`, { token: guesser.token })).status);
+  const limited = await call('POST', '/invites/ZZZZ9999/join', { token: guesser.token });
+  record('Join: 10 wrong codes are answered (404), then the account is slowed down (429 with Retry-After)', statuses.slice(0, 10).every((s) => s === 404) && statuses[10] === 429 && limited.status === 429 && Number(limited.headers.get('retry-after')) > 0 && hasError(limited), `${statuses.join(',')} then ${limited.status}, retry-after ${limited.headers.get('retry-after')}`);
+  const otherAccount = await call('POST', '/invites/ZZZZ9999/join', { token: stranger.token });
+  record('...while another account is not affected (404)', otherAccount.status === 404, `HTTP ${otherAccount.status}`);
+  const wxTrip = await makeTrip(ctx, guesser, { start: 3, days: 2 });
+  const wx = [];
+  for (let i = 0; i < 31; i++) wx.push((await call('GET', `/trips/${wxTrip.id}/weather`, { token: guesser.token })).status);
+  record('Weather (an outside service): 30 a minute per account, then 429', wx.slice(0, 30).every((s) => s === 200) && wx[30] === 429, wx.join(','));
+
+  // ---------- in the browser ----------
+  ctx.setSection('Members in the browser');
+  const host = await ctx.newUser('mhost', 'Ashish Bisht');
+  const friend = await ctx.newUser('mfriend', 'Dhruv Grover');
+  const webTrip = await makeTrip(ctx, host);
+  const ownerPage = await ctx.openPage();
+  await ctx.login(ownerPage.page, host);
+  await ownerPage.page.goto(`${ctx.base}/trips/${webTrip.id}/members`, { waitUntil: 'networkidle' });
+  await ownerPage.page.getByText('No working links').waitFor({ timeout: 15000 }).catch(() => {});
+  await ownerPage.page.getByRole('button', { name: 'Make an Editor link' }).click();
+  const codeEl = ownerPage.page.getByRole('list', { name: 'Invite links that still work' }).locator('p').first();
+  await codeEl.waitFor({ timeout: 15000 });
+  const code = (await codeEl.innerText()).replace(/^Code\s*/i, '').trim();
+  record('Owner makes an Editor link on the Members tab and sees its code', /^[A-Z2-9]{8}$/.test(code), `"${code}"`);
+  if (ctx.saveLook) await ctx.shot(ownerPage.page, 'members-owner');
+
+  // A logged-out visitor opens the link, logs in, comes back, joins
+  const visitor = await ctx.openPage();
+  await visitor.page.goto(`${ctx.base}/join/${code}`, { waitUntil: 'networkidle' });
+  const invitedText = (await visitor.page.locator('main').innerText()).replace(/\s+/g, ' ');
+  record('Logged out, the invite page says who invited you, to what, and as what', /Ashish Bisht invited you to/.test(invitedText) && /Manali Trip/.test(invitedText) && /You join as Editor/.test(invitedText), invitedText.slice(0, 160));
+  await visitor.page.getByRole('link', { name: 'Log in to join' }).click();
+  await visitor.page.getByLabel('Email').fill(friend.email);
+  await visitor.page.getByLabel('Password', { exact: true }).fill(friend.password);
+  await visitor.page.getByRole('button', { name: 'Log in' }).click();
+  const backOnInvite = await visitor.page.waitForURL(`${ctx.base}/join/${code}`, { timeout: 20000 }).then(() => true, () => false);
+  record('After logging in, they are back on the same invite page', backOnInvite, visitor.page.url());
+  await visitor.page.getByRole('button', { name: /^Join / }).click();
+  const inTrip = await visitor.page.waitForURL(`${ctx.base}/trips/${webTrip.id}`, { timeout: 20000 }).then(() => true, () => false);
+  const tabs = inTrip ? await visitor.page.getByRole('navigation', { name: 'Trip sections' }).innerText() : '';
+  record('Joining opens the trip, without the owner-only Trip settings tab', inTrip && !/Trip settings/.test(tabs), `${visitor.page.url()} tabs: ${tabs.replace(/\s+/g, ' ')}`);
+  await visitor.page.goto(`${ctx.base}/join/${code}`, { waitUntil: 'networkidle' });
+  await visitor.page.getByRole('button', { name: /^Join / }).click();
+  const already = await visitor.page.getByText("You're already in this trip.").waitFor({ timeout: 15000 }).then(() => true, () => false);
+  record(`Opening the invite again and joining: "You're already in this trip."`, already);
+
+  await visitor.page.goto(`${ctx.base}/trips/${webTrip.id}/members`, { waitUntil: 'networkidle' });
+  const memberControls = await visitor.page.getByRole('button', { name: /^(Make (viewer|editor)|Remove)/ }).count();
+  const inviteBoard = await visitor.page.getByRole('heading', { name: 'Invite people' }).count();
+  const leaveButton = await visitor.page.getByRole('button', { name: 'Leave the trip' }).count();
+  record('An editor sees the group with no invite board and no role or remove buttons, but can leave', memberControls === 0 && inviteBoard === 0 && leaveButton === 1, `${memberControls} controls, ${inviteBoard} invite boards, ${leaveButton} leave`);
+
+  // A fresh expired invite: the first one may already be gone (MongoDB's TTL clean-up runs every minute).
+  const old2 = old.slice(0, 7) + (old.endsWith('9') ? '8' : '9');
+  await db.collection('invites').insertOne({ code: old2, tripId: new ObjectId(webTrip.id), role: 'viewer', createdBy: host.uid, createdAt: new Date(Date.now() - 7 * 86_400_000 - 5_000) });
+  await visitor.page.goto(`${ctx.base}/join/${old2}`, { waitUntil: 'networkidle' });
+  const expiredShown = await visitor.page.getByText('This invite has expired, ask the owner for a new one.').waitFor({ timeout: 15000 }).then(() => true, () => false);
+  record('An expired invite link shows the expired message', expiredShown);
+  if (ctx.saveLook) await ctx.shot(visitor.page, 'invite-expired');
+
+  await visitor.page.goto(`${ctx.base}/trips`, { waitUntil: 'networkidle' });
+  await visitor.page.getByLabel('Invite code', { exact: true }).fill('nope');
+  await visitor.page.getByRole('button', { name: 'Open the invite' }).click();
+  const codeError = await visitor.page.locator('[aria-invalid="true"]').count();
+  await visitor.page.getByLabel('Invite code', { exact: true }).fill(code.toLowerCase());
+  await visitor.page.getByRole('button', { name: 'Open the invite' }).click();
+  const viaCode = await visitor.page.waitForURL(`${ctx.base}/join/${code}`, { timeout: 10000 }).then(() => true, () => false);
+  record('Your trips: a wrong code is refused under the field, a real one opens its invite', codeError === 1 && viaCode, `${codeError} errors, ${visitor.page.url()}`);
+  record('No script errors for the visitor', visitor.consoleErrors.length === 0, visitor.consoleErrors.slice(0, 3).join(' | '));
+  await visitor.context.close();
+
+  await ownerPage.page.reload({ waitUntil: 'networkidle' });
+  const row = ownerPage.page.getByRole('list', { name: 'People in this trip' }).getByRole('listitem').filter({ hasText: 'Dhruv Grover' });
+  const rowBefore = (await row.innerText().catch(() => '')).replace(/\s+/g, ' ');
+  await ownerPage.page.getByRole('button', { name: 'Make viewer (Dhruv Grover)' }).click();
+  await row.getByText('Viewer', { exact: true }).waitFor({ timeout: 10000 }).catch(() => {});
+  const rowAfter = (await row.innerText().catch(() => '')).replace(/\s+/g, ' ');
+  record('The owner sees Dhruv as Editor and makes him a viewer', /Editor/.test(rowBefore) && /Viewer/.test(rowAfter), `${rowBefore} -> ${rowAfter}`);
+  record('No script errors for the owner', ownerPage.consoleErrors.length === 0, ownerPage.consoleErrors.slice(0, 3).join(' | '));
+  await ownerPage.context.close();
+
+  const phone = await ctx.openPage(...ctx.PHONE);
+  for (const route of [`/join/${code}`, `/trips/${webTrip.id}/members`]) {
+    if (route.includes('members')) await ctx.login(phone.page, host);
+    await phone.page.goto(ctx.base + route, { waitUntil: 'networkidle' });
+    const extra = await ctx.overflowOf(phone.page);
+    record(`Phone width (${ctx.PHONE[0]}px), ${route.replace(webTrip.id, ':id')}: no sideways scrolling`, extra <= 0, `${extra}px`);
+  }
+  await phone.context.close();
+}
 
 // ====================== Step 4: weather ======================
 async function weatherChecks(ctx) {

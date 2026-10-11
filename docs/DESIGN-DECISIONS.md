@@ -135,6 +135,21 @@ Data choices:
 - Moving a stop to another day is one update computed inside MongoDB (take it out of every day, add it to the end of the new day), so other stops added meanwhile are kept.
 - At most 30 stops per day (409 with the reason). The stop search looks within 60 km of the destination, nearest first, through our API, so the Geoapify key never reaches the browser.
 
+## Members and invites (Step 5)
+
+- **Members tab:** the group as a route board, one row per person: name, a small ink plate with the role and what it allows in a plain sentence, and the join date. The owner's rows carry "Make viewer / Make editor" and "Remove" buttons; nobody else sees them. Your own row says "You". The owner's page ends with one line saying why they cannot leave; everyone else gets a "Leave this trip" board with the same red band as deleting a trip.
+- **Invite board** (owner only, yellow band like the add-stop board): two painted plates to choose the role (Editor / Viewer, each with what it allows), one button to make the link, then every working link with its code painted large so it can be read out over a phone call, "Works until 18 Oct 2026", Copy link and Stop this link. New shared component `ChoicePlates`: real radio buttons under the paint, so the keyboard and screen readers work. The chosen plate fills cap yellow; hover thickens the outline like every button.
+- **Invite page** (`/join/CODE`): set left of centre like the sign-up pages. "Ashish invited you to" then the trip name very large, a board with the trip's stone, place, dates, head-count and one sentence on what the role allows ("You join as Editor: you can add and change stops, bills and packing items."). Logged out: "Log in to join" and "Create an account", both bring you back. The expired, unknown and unreadable cases each have their own headline and the exact message.
+- **Codes:** 8 characters from letters and digits without look-alikes (no 0/O, 1/I/L), typed in any case. An invite is not tied to one person; anyone with the link can use it for 7 days. The owner can stop a link at once.
+
+Data choices:
+- Expiry is decided in code (`now >= createdAt + 7 days`) on every preview and join. The TTL index only tidies up, about once a minute. Expired answers HTTP 410; a code MongoDB has already deleted answers 404 with a message that mentions the 7 days, because by then the two cannot be told apart.
+- Joining is one update that only matches when the person is not yet a member and the trip has fewer than 20 people, so two quick taps (or two codes) cannot add someone twice. Already a member: 409 "You're already in this trip."
+- The public invite preview shows the trip name, place, dates, how many people, and the owner's name. No member names, no money, no days or stops. It includes the trip id, which opens nothing: every trip route still checks membership.
+- "Owes money" is computed from every bill and settlement of the trip with the same balance maths settle-up will use (`server/src/utils/money.js`): what the person paid minus their share. A member whose balance is below zero cannot be removed and cannot leave.
+- Removed or departed members keep their old bills and stops, shown as "a former member" where their name is no longer known.
+- Rate limits live in the Express process's memory, per Firebase user, as a sliding window. That fits the API running as one process on Render; restarting clears the counts. Limits: 10 joins per 15 minutes (stops code guessing), 60 searches and 30 weather checks per minute.
+
 ## Weather (Step 4)
 
 - **On each day stone:** under the stop count, a small ink weather symbol with the high and low ("17° / 6°"), then "Rain 35%". That is the kilometre stone idea from section 2 made real: the day's number, date and forecast on one painted face.
@@ -159,6 +174,8 @@ Data choices:
 - A stranger gets 403 on a trip that exists and 404 on one that does not.
 
 ## Change log
+
+- 2026-10-11, Step 5: Members tab (group board, invite board, leave board), invite page `/join/:code`, "Got an invite code?" box on Your trips, shared `ChoicePlates`. The Overview now reads role names from one shared file.
 
 - 2026-10-11, Step 4: forecast on each day stone, painted weather symbols (`WeatherMark`), red rain warning line and boards, weather box on the overview with its own loading and error states, forecast line on the day plan. Day stones in a row now share one height.
 

@@ -5,9 +5,8 @@ import DayWeather from '../../components/DayWeather';
 import WeatherBox from '../../components/WeatherBox';
 import { formatRupees, placeLine, plural } from '../../utils/format';
 import { tripPins } from '../../utils/pins';
+import { ROLE_LABEL } from '../../utils/roles';
 import styles from './Overview.module.css';
-
-const ROLE_LABEL = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
 
 // The trip's first screen: the route of day stones, the map, the money line and the group.
 export default function Overview() {

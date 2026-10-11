@@ -1,0 +1,108 @@
+.frame {
+  min-height: 100vh;
+}
+
+.header {
+  padding: var(--space-4) var(--page-gutter);
+}
+
+/* Left of centre, like the sign-up and log-in pages */
+.main {
+  width: min(34rem, 100%);
+  padding: var(--space-6) var(--page-gutter) var(--space-8);
+  margin-left: clamp(0rem, 12vw, 12rem);
+  box-sizing: content-box;
+}
+
+.kicker {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+}
+
+.title {
+  font-size: var(--text-3xl);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  margin-bottom: var(--space-4);
+  overflow-wrap: anywhere;
+}
+
+.board {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.summary {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-end;
+}
+
+.lines {
+  min-width: 0;
+}
+
+.lines p {
+  margin: 0 0 var(--space-2);
+}
+
+.lines p:last-child {
+  margin-bottom: 0;
+}
+
+.role {
+  padding-top: var(--space-2);
+  border-top: var(--line-thin);
+}
+
+.join {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.note {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.expires {
+  margin-top: var(--space-4);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.problem {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (max-width: 40rem) {
+  .main {
+    width: auto;
+    margin-left: 0;
+    padding-top: var(--space-4);
+  }
+
+  .title {
+    font-size: var(--text-2xl);
+  }
+
+  .summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .board {
+    padding: var(--space-4);
+  }
+}

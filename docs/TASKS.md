@@ -26,7 +26,7 @@ Activities per day (title, time, notes, place via Geoapify autocomplete `/api/ge
 Open-Meteo forecast through the 3-hour `weatherCache` (location rounded to 2 decimals). Forecast on each day stone. Rain warning when rain chance is above 60% on a day with activities. Beyond the forecast range, the "closer to your trip" message.
 - Done when: forecast shows; a second visit does not call Open-Meteo (proved by a log or counter); the weather box failing does not break the rest of the page.
 
-## - [ ] Step 5: Members and roles
+## - [x] Step 5: Members and roles
 Invite link/code (Editor or Viewer, 7 days, expiry checked in code). Join works for a logged-out visitor (log in, come back to the invite). Owner changes roles and removes members; owner cannot leave; a member who owes money cannot be removed. Rate limits on invite join and outside-API routes, counted per Firebase user, in Express.
 - Done when: a second test account joins; a Viewer gets 403 on every write route; an expired invite shows the expired message; joining twice says "You're already in this trip".
 

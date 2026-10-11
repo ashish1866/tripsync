@@ -1,0 +1,86 @@
+.set {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  font-size: var(--text-md);
+}
+
+.plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+.plate {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+}
+
+/* The real radio: invisible but still in the tab order and read out */
+.input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.face {
+  flex: 1;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.label {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+.hint {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+/* Hover: heavier outline, the same as buttons */
+.plate:hover .face {
+  outline: 2px solid var(--ink);
+  outline-offset: -4px;
+}
+
+/* Chosen: painted cap yellow */
+.input:checked + .face {
+  background: var(--cap);
+}
+
+.input:checked + .face .hint {
+  color: var(--ink);
+}
+
+/* Keyboard focus: the shared double ring on the plate */
+.input:focus-visible + .face {
+  box-shadow: var(--focus);
+}
+
+.set:disabled .plate {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.set:disabled .plate:hover .face {
+  outline: none;
+}

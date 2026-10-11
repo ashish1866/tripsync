@@ -8,6 +8,7 @@ import Button from '../components/Button';
 import Notice from '../components/Notice';
 import RoadLoader from '../components/RoadLoader';
 import BudgetBar from '../components/BudgetBar';
+import JoinCode from '../components/JoinCode';
 import { formatDate, formatRange, placeLine, plural } from '../utils/format';
 import { tripLength, whenLine } from '../utils/dates';
 import styles from './Trips.module.css';
@@ -93,6 +94,8 @@ export default function Trips() {
             ))}
           </ul>
         )}
+
+        {state.status !== 'loading' && <JoinCode />}
       </main>
     </>
   );
