@@ -49,7 +49,7 @@ function Body({ trip, weather, onRetry }) {
     );
   }
 
-  const { days, source, fetchedAt, forecastDays, rainLimit } = weather.data;
+  const { days, source, provider, fellBack, fetchedAt, forecastDays, rainLimit } = weather.data;
   const stopsOn = new Map(trip.days.map((d) => [d.dayNumber, d.activities.length]));
   const warned = days.filter((d) => rainWarning(d, stopsOn.get(d.dayNumber) || 0, rainLimit));
   const later = days.filter((d) => d.status === 'later').map((d) => d.dayNumber);
@@ -80,7 +80,14 @@ function Body({ trip, weather, onRetry }) {
 
       {allPast && <p className={styles.line}>This trip is over, so there is no forecast to show.</p>}
 
-      {source !== 'none' && fetchedAt && (
+      {source !== 'none' && fetchedAt && provider === 'openweather' && (
+        <p className={styles.source}>
+          {fellBack
+            ? `Forecast from OpenWeather, because Open-Meteo did not answer. It reaches about ${forecastDays} days ahead, so later days show once Open-Meteo is back. Checked at ${formatClock(fetchedAt)}; TripSync asks Open-Meteo again in 15 minutes.`
+            : `Forecast from OpenWeather, checked at ${formatClock(fetchedAt)}. It reaches about ${forecastDays} days ahead and is checked again after 3 hours.`}
+        </p>
+      )}
+      {source !== 'none' && fetchedAt && provider !== 'openweather' && (
         <p className={styles.source}>
           Forecast from Open-Meteo, checked at {formatClock(fetchedAt)}. It is checked again after 3 hours.
         </p>

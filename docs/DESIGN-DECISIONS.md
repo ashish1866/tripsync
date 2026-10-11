@@ -236,7 +236,17 @@ Data choices:
 - A failing outside service answers HTTP 503, not 502. Measured on the live site: a 502 from the API came out of Cloudflare as its own grey HTML "Bad gateway" page, which the website cannot read. The 503 arrives as the API's JSON.
 - One retry, after a short pause, on 429, 5xx or no answer. Nothing is retried on a plain refusal such as 401 or 404.
 
+## Backup forecast (OpenWeather)
+
+- Open-Meteo stays the main forecast (16 days, no key). OpenWeather's **free** key gives only 5 days (3-hourly readings); a 16-day daily forecast is a paid OpenWeather product. So OpenWeather is a backup, not a replacement: when Open-Meteo refuses (its daily limit on Render's shared address), the trip still shows days 1 to 5, and days beyond say "the forecast appears closer to the trip" as before.
+- It is never silent. The weather box says "Forecast from OpenWeather, because Open-Meteo did not answer. It reaches about 5 days ahead, so later days show once Open-Meteo is back." The day stones, symbols and rain warning look exactly the same, because the readings are folded into Open-Meteo's daily shape before anything else sees them.
+- How 3-hourly readings become a day: cut at the place's own midnight (OpenWeather says the shift from UTC), highest high, lowest low, highest rain chance, and the most severe condition names the day (a thunderstorm reading makes a thunderstorm day). A day with fewer than four of its eight readings (today late in the evening, or the last day) is left out, because half a day has no honest high or low. A condition with no honest equivalent (tornado, ash) shows "No description for this forecast" rather than a guess.
+- The backup's copy is kept 15 minutes, not 3 hours, so TripSync goes back to the 16-day source as soon as it answers. Normal Open-Meteo copies still last 3 hours.
+- Settings (server only, never the browser): `OPENWEATHER_KEY` (empty = no backup) and `WEATHER_PROVIDER` = `auto` (default), `open-meteo` or `openweather` (to test the backup on purpose).
+
 ## Change log
+
+- 2026-10-12: backup forecast from OpenWeather when Open-Meteo refuses; the weather box's source line says which one answered and why.
 
 - 2026-10-12, Step 10: outside-service failures now say what the service replied (503, not 502). No visual change; the existing warning board and "Try again" buttons carry the new wording.
 

@@ -26,3 +26,5 @@ services:
         sync: false # secret: typed into Render's dashboard
       - key: GEOAPIFY_KEY
         sync: false # secret: not used until the Explore step, but asked for now (see the guide)
+      - key: OPENWEATHER_KEY
+        sync: false # secret, optional: the backup forecast when Open-Meteo refuses. Empty = no backup. Set on Render's Environment page.

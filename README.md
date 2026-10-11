@@ -52,16 +52,16 @@ The Render address is a setting (`API_ORIGIN` in `server/wrangler.jsonc`), not w
 Things on the live setup that are worth knowing:
 
 - **Speed:** see "Measured speed" at the end of this file.
-- **The forecast depends on Open-Meteo accepting Render's address.** Render's free plan shares its outgoing addresses between many customers, and Open-Meteo's free service limits each address per day. On 2026-10-12 it answered "Daily API request limit exceeded. Please try again tomorrow." to Render. When that happens the weather box says so, with Open-Meteo's own words, and the rest of the trip works. The forecast works normally from any other address (this PC, for example). Town search and Geoapify places were not affected.
+- **The forecast depends on Open-Meteo accepting Render's address (unless the OpenWeather backup key is set).** Render's free plan shares its outgoing addresses between many customers, and Open-Meteo's free service limits each address per day. On 2026-10-12 it answered "Daily API request limit exceeded. Please try again tomorrow." to Render. When that happens the weather box says so, with Open-Meteo's own words, and the rest of the trip works. The forecast works normally from any other address (this PC, for example). Town search and Geoapify places were not affected.
 - **Sleeping:** Render's free plan sleeps after 15 quiet minutes. The Worker's Cron Trigger pings `/api/health/ping` every 10 minutes to keep it awake (results are in the Worker's logs). If it does sleep, the first request takes about a minute and the site shows "not answering, try again in a minute".
-- **Outside services:** the forecast (Open-Meteo, cached 3 hours per town) and the place searches (Geoapify, cached 7 days) can fail on their own. When they do, only the weather box or the results list shows an error; the rest of the trip keeps working.
+- **Outside services:** the forecast (Open-Meteo, 16 days, cached 3 hours per town) and the place searches (Geoapify, cached 7 days) can fail on their own. A free OpenWeather key (`OPENWEATHER_KEY`) adds a backup forecast: if Open-Meteo refuses, TripSync shows OpenWeather's 5-day forecast and says so, and asks Open-Meteo again after 15 minutes. `WEATHER_PROVIDER=openweather` forces the backup for testing (`open-meteo` turns it off; the default `auto` is the one above). When they do, only the weather box or the results list shows an error; the rest of the trip keeps working.
 
 ## Run it on your PC
 
 On this PC, PowerShell blocks `npm` scripts, so type `npm.cmd` (or use Command Prompt).
 
 1. Install Node.js 22 (22.12 or newer).
-2. Copy `server/.dev.vars.example` to `server/.dev.vars`, and `client/.env.example` to `client/.env`. Fill both in from the private setup note. Both files are git-ignored.
+2. Copy `server/.dev.vars.example` to `server/.dev.vars`, and `client/.env.example` to `client/.env`. Fill both in from the private setup note. Both files are git-ignored. (`OPENWEATHER_KEY` in `.dev.vars` is optional: the backup forecast. Paste keys only into these files and Render's Environment page, never into chat, the repo or a commit message.)
 3. Install everything: `npm.cmd install`
 4. Create the database indexes (safe to run again): `npm.cmd run setup-db`
 5. Start the site and the API together: `npm.cmd run dev`

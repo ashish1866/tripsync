@@ -1,5 +1,6 @@
 import { getDb } from '../config/db.js';
-import { fetchJson } from './outside.js';
+import { getConfig } from '../config/env.js';
+import { fetchForecast, OPEN_METEO_DAYS, OPENWEATHER_DAYS } from './forecast.js';
 import { weatherKey } from '../utils/coords.js';
 import { addDays, datesBetween } from '../utils/dates.js';
 import { RAIN_LIMIT, weatherForDays } from '../utils/weather.js';
@@ -9,50 +10,67 @@ import { RAIN_LIMIT, weatherForDays } from '../utils/weather.js';
 // 1. Round the destination to 2 decimals (about 1 km): trips to the same town share one entry.
 // 2. A cached entry younger than 3 hours is used as it is. The age is checked here
 //    in code too, because MongoDB's TTL clean-up runs only about once a minute.
-// 3. Otherwise ask Open-Meteo (free, no key) for 16 days, store it, use it.
-// Open-Meteo's forecast reaches about 16 days ahead. Days beyond it come back
-// as "later", and a trip that starts beyond it does not call Open-Meteo at all.
-const BASE = 'https://api.open-meteo.com/v1/forecast';
+// 3. Otherwise ask for a forecast (Open-Meteo for 16 days; OpenWeather's 5 days if Open-Meteo
+//    refuses and a key is set, see forecast.js), store it, use it.
+// A forecast that came from the OpenWeather backup is kept for only 15 minutes, so TripSync
+// goes back to Open-Meteo's longer forecast as soon as it answers again.
+// Days beyond what the provider reaches come back as "later", and a trip that starts beyond
+// 16 days does not call anything at all.
 export const CACHE_MS = 3 * 60 * 60 * 1000;
-const FORECAST_DAYS = 16;
-const DAILY = 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code';
+export const BACKUP_CACHE_MS = 15 * 60 * 1000;
 
 const todayUtc = () => new Date().toISOString().slice(0, 10);
+
+// How long this stored forecast stays usable.
+const freshFor = (data) => (data?.fellBack ? BACKUP_CACHE_MS : CACHE_MS);
 
 async function cachedForecast(key) {
   const db = await getDb();
   const cache = db.collection('weatherCache');
-  const fresh = await cache.findOne({ key, createdAt: { $gt: new Date(Date.now() - CACHE_MS) } });
-  if (fresh) {
-    console.log(`[weather] ${key}: from the cache (stored ${fresh.createdAt.toISOString()})`);
-    return { data: fresh.data, fetchedAt: fresh.createdAt, source: 'cache' };
+  const mode = getConfig().WEATHER_PROVIDER;
+  const stored = await cache.findOne({ key });
+  // A forced provider (testing) ignores what the other one stored.
+  const usable = stored && (mode === 'auto' || mode === (stored.data?.provider ?? 'open-meteo')) && Date.now() - stored.createdAt.getTime() < freshFor(stored.data);
+  if (usable) {
+    console.log(`[weather] ${key}: from the cache (stored ${stored.createdAt.toISOString()})`);
+    return { data: stored.data, fetchedAt: stored.createdAt, source: 'cache' };
   }
 
   const [lat, lng] = key.split(',');
-  const params = new URLSearchParams({ latitude: lat, longitude: lng, daily: DAILY, timezone: 'auto', forecast_days: String(FORECAST_DAYS) });
-  const answer = await fetchJson(`${BASE}?${params}`, { service: 'The weather service', showReason: true });
-  const data = { timezone: answer.timezone ?? null, daily: answer.daily ?? null };
+  const answer = await fetchForecast(lat, lng);
+  const data = { provider: answer.provider, fellBack: answer.fellBack, timezone: answer.timezone, daily: answer.daily };
   const now = new Date();
   await cache.updateOne({ key }, { $set: { data, createdAt: now } }, { upsert: true });
-  console.log(`[weather] ${key}: asked Open-Meteo`);
-  return { data, fetchedAt: now, source: 'open-meteo' };
+  console.log(`[weather] ${key}: asked ${answer.provider}${answer.fellBack ? ' (backup)' : ''}`);
+  return { data, fetchedAt: now, source: answer.provider };
 }
 
 // The weather for each day of a trip ({ destination, startDate, endDate }):
-// { place, source: 'cache' | 'open-meteo' | 'none', fetchedAt, timezone, days }.
+// { place, source: 'cache' | 'open-meteo' | 'openweather' | 'none', provider, fellBack, fetchedAt, timezone, forecastDays, days }.
 export async function weatherForTrip(trip) {
   const key = weatherKey(trip.destination.location);
   const days = datesBetween(trip.startDate, trip.endDate).map((date, i) => ({ dayNumber: i + 1, date }));
   const today = todayUtc();
 
-  // Nothing to ask for: the whole trip is beyond the forecast, or already over.
+  // Nothing to ask for: the whole trip is beyond the longest forecast, or already over.
   const lastDate = days[days.length - 1].date;
-  if (days[0].date >= addDays(today, FORECAST_DAYS) || lastDate < addDays(today, -1)) {
+  if (days[0].date >= addDays(today, OPEN_METEO_DAYS) || lastDate < addDays(today, -1)) {
     const none = weatherForDays(days, null).map((d) => (d.date < today ? { ...d, status: 'past' } : d));
-    return { place: key, source: 'none', fetchedAt: null, timezone: null, forecastDays: FORECAST_DAYS, rainLimit: RAIN_LIMIT, days: none };
+    return { place: key, source: 'none', provider: null, fellBack: false, fetchedAt: null, timezone: null, forecastDays: OPEN_METEO_DAYS, rainLimit: RAIN_LIMIT, days: none };
   }
 
   const { data, fetchedAt, source } = await cachedForecast(key);
+  const provider = data.provider ?? 'open-meteo'; // entries stored before the backup existed are Open-Meteo's
   // rainLimit goes to the browser, so the rain-warning rule lives in one place (utils/weather.js).
-  return { place: key, source, fetchedAt, timezone: data.timezone, forecastDays: FORECAST_DAYS, rainLimit: RAIN_LIMIT, days: weatherForDays(days, data.daily) };
+  return {
+    place: key,
+    source,
+    provider,
+    fellBack: Boolean(data.fellBack),
+    fetchedAt,
+    timezone: data.timezone,
+    forecastDays: provider === 'openweather' ? OPENWEATHER_DAYS : OPEN_METEO_DAYS,
+    rainLimit: RAIN_LIMIT,
+    days: weatherForDays(days, data.daily),
+  };
 }

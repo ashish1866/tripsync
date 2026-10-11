@@ -19,6 +19,7 @@ const CODES = {
   65: ['Heavy rain', 'rain'],
   66: ['Freezing rain', 'rain'],
   67: ['Freezing rain', 'rain'],
+  68: ['Rain and snow', 'snow'],
   71: ['Light snow', 'snow'],
   73: ['Snow', 'snow'],
   75: ['Heavy snow', 'snow'],

@@ -2,6 +2,12 @@
 # .dev.vars is git-ignored. Never commit real values.
 MONGODB_URI=
 GEOAPIFY_KEY=
+# Optional backup forecast (openweathermap.org, free key). Used when Open-Meteo refuses. Leave empty to turn it off.
+OPENWEATHER_KEY=
+
+# Which forecast to ask: auto (Open-Meteo, then OpenWeather if it fails), open-meteo, or openweather (to test the backup).
+# Leave empty for auto.
+WEATHER_PROVIDER=
 
 # Not secret, but the API needs them.
 FIREBASE_PROJECT_ID=tripsync-d3e9b
