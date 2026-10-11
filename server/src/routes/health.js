@@ -3,21 +3,26 @@ import { getConfig } from '../config/env.js';
 
 const router = Router();
 
+// GET /api/health/ping
+// Does NOT touch the database. Answers instantly as long as the server process
+// is up. This is what the keep-awake ping calls, so it stays cheap.
+router.get('/ping', (req, res) => {
+  res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) });
+});
+
 // GET /api/health
-// Proves the whole chain works: Express is running and MongoDB Atlas answers.
-// It reads one document from the users collection (null if there are no users yet).
+// Proves the whole chain works: Express is running AND MongoDB Atlas answers.
+// It sends MongoDB a "ping" command, which reads no user data, so this public
+// route never reveals anything about who uses TripSync.
 router.get('/', async (req, res) => {
   const started = Date.now();
   const db = await req.getDb();
-  const oneUser = await db.collection('users').findOne({}, { projection: { _id: 1, createdAt: 1 } });
-  const userCount = await db.collection('users').estimatedDocumentCount();
+  await db.command({ ping: 1 });
 
   res.json({
     status: 'ok',
     database: getConfig().MONGODB_DB,
     mongo: 'connected',
-    usersInDatabase: userCount,
-    readOneUser: oneUser ? 'found' : 'none yet',
     dbMs: Date.now() - started,
   });
 });

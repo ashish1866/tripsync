@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --port 8787",
-    "dev:node": "node --env-file=.dev.vars src/server.js",
+    "dev": "node --watch-path=src --env-file=.dev.vars src/server.js",
+    "start": "node src/server.js",
     "deploy": "wrangler deploy",
     "setup-db": "node --env-file=.dev.vars src/scripts/setupIndexes.js",
     "test": "vitest --run --passWithNoTests"

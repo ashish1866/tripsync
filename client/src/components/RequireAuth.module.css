@@ -1,0 +1,12 @@
+.problem {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 34rem;
+  padding: var(--space-8) var(--page-gutter);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}

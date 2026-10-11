@@ -1,127 +1,382 @@
-// TripSync browser check: one command, one short pass/fail report.
+// TripSync check: one command, one short pass/fail report.
 //
-//   npm run check                       (checks http://localhost:5173, needs `npm run dev`)
-//   npm run check -- --live             (checks the deployed workers.dev site)
-//   npm run check -- --look             (also saves screenshots to judge the design)
+//   npm run check                (local: http://localhost:5173, needs `npm run dev` running)
+//   npm run check -- --live      (the deployed site)
+//   npm run check -- --look      (also save screenshots to judge the design)
+//
+// What it does:
+//   1. Public pages: title, favicon, fonts really loaded, focus ring, no console errors.
+//   2. API guard: every "must fail" request (no token, forged token, edited token, bad body).
+//   3. Profile API with a real Firebase account: 404 -> create 201 -> repeat 200, one Mongo document.
+//   4. The sign-up / log-in / log-out story in a real browser, plus phone width.
+// It creates throwaway Firebase accounts (tripsync.check.*@example.com) and deletes
+// them again, together with their MongoDB profiles, even when a check fails.
 //
 // Uses the Chrome already installed on this PC (playwright-core, no browser download).
-// Screenshots are saved to checks/.artifacts only when a check fails, or with --look.
-import { mkdirSync } from 'node:fs';
+// Screenshots go to checks/.artifacts only when a check fails, or with --look.
+import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { generateKeyPair, SignJWT } from 'jose';
+import { MongoClient } from 'mongodb';
 import { chromium } from 'playwright-core';
 
 const LIVE_URL = 'https://tripsync.ashishbisht.workers.dev';
 const args = process.argv.slice(2);
 const base = args.includes('--live') ? LIVE_URL : 'http://localhost:5173';
 const saveLook = args.includes('--look');
-const artifacts = path.join(path.dirname(fileURLToPath(import.meta.url)), '.artifacts');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const artifacts = path.join(root, 'checks', '.artifacts');
 mkdirSync(artifacts, { recursive: true });
 
-const results = [];
-function record(name, ok, detail = '') {
-  results.push({ name, ok, detail });
+// Settings from the local, git-ignored files (never printed).
+function readEnvFile(file) {
+  const out = {};
+  for (const line of readFileSync(path.join(root, file), 'utf8').split(/\r?\n/)) {
+    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
+    if (m) out[m[1]] = m[2];
+  }
+  return out;
 }
+const clientEnv = readEnvFile('client/.env');
+const serverEnv = readEnvFile('server/.dev.vars');
+const FIREBASE_KEY = clientEnv.VITE_FIREBASE_API_KEY;
+const PROJECT_ID = clientEnv.VITE_FIREBASE_PROJECT_ID;
+
+// ---------- report ----------
+const results = [];
+let section = '';
+function record(name, ok, detail = '') {
+  results.push({ section, name, ok: Boolean(ok), detail });
+}
+
+// ---------- Firebase REST (the same service the website uses) ----------
+const identity = (method) => `https://identitytoolkit.googleapis.com/v1/accounts:${method}?key=${FIREBASE_KEY}`;
+async function firebase(method, body) {
+  const res = await fetch(identity(method), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Firebase ${method}: ${data?.error?.message}`);
+  return data;
+}
+
+const stamp = Date.now();
+const testAccounts = []; // { email, password } to delete at the end
+function newAccount(tag) {
+  const account = { email: `tripsync.check.${stamp}.${tag}@example.com`, password: `Check-${crypto.randomUUID()}` };
+  testAccounts.push(account);
+  return account;
+}
+
+// ---------- API helper ----------
+async function call(method, route, { token, body, rawBody, headers = {} } = {}) {
+  const res = await fetch(base + '/api' + route, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body !== undefined || rawBody !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...headers,
+    },
+    body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined),
+  });
+  const data = await res.json().catch(() => null);
+  return { status: res.status, data };
+}
+const hasError = (r) => typeof r.data?.error === 'string' && r.data.error.length > 0;
+
+const mongo = new MongoClient(serverEnv.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+const users = () => mongo.db(serverEnv.MONGODB_DB || 'tripsync_dev').collection('users');
 
 const browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch({ channel: 'msedge' }));
 
-async function openPage(width, height) {
+async function openPage(width = 1366, height = 800) {
   const context = await browser.newContext({ viewport: { width, height } });
   const page = await context.newPage();
   const consoleErrors = [];
-  page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
+  // HTTP errors we cause on purpose (401, 404, wrong password) also log "Failed to load resource";
+  // only real script errors count.
+  page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && consoleErrors.push(m.text()));
   page.on('pageerror', (e) => consoleErrors.push(e.message));
   return { context, page, consoleErrors };
 }
 
 async function shot(page, name) {
-  const file = path.join(artifacts, `${name}.png`);
-  await page.screenshot({ path: file, fullPage: true });
-  return file;
+  await page.screenshot({ path: path.join(artifacts, `${name}.png`), fullPage: true });
 }
 
-// Laptop width: the home page and its build check
-{
-  const { context, page, consoleErrors } = await openPage(1366, 800);
-  await page.goto(base + '/', { waitUntil: 'networkidle' });
-
-  const title = await page.title();
-  record('Page title is "TripSync"', title === 'TripSync', `got "${title}"`);
-
-  const favicon = await page.getAttribute('link[rel="icon"]', 'href');
-  const faviconRes = favicon ? await page.request.get(new URL(favicon, base).href) : null;
-  record('Own favicon is served', Boolean(faviconRes?.ok()) && favicon.endsWith('.svg'), favicon || 'no <link rel=icon>');
-
-  // Wait for the API row to settle (passed or failed).
-  const apiRow = page.locator('li', { hasText: 'API' });
-  await apiRow.locator('text=/answered in|Could not|server/').first().waitFor({ timeout: 30000 }).catch(() => {});
-  const apiText = (await apiRow.innerText()).replace(/\s+/g, ' ');
-  record('Home page shows the API answered', /Passed: \/api\/health answered/.test(apiText), apiText);
-
-  const dbText = (await page.locator('li', { hasText: 'Database' }).innerText()).replace(/\s+/g, ' ');
-  record('Home page shows the Atlas database', /Passed: tripsync_dev on MongoDB Atlas/.test(dbText), dbText);
-
-  // Fonts: the browser must report both families as really loaded and used.
-  const fonts = await page.evaluate(async () => {
-    await document.fonts.ready;
-    const loaded = [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/"/g, ''));
-    const h1 = getComputedStyle(document.querySelector('h1')).fontFamily;
-    const body = getComputedStyle(document.body).fontFamily;
-    return { loaded: [...new Set(loaded)], h1, body };
-  });
-  const hasAnek = fonts.loaded.includes('Anek Latin Variable');
-  const hasMukta = fonts.loaded.includes('Mukta');
-  record('Anek Latin and Mukta are loaded', hasAnek && hasMukta, `loaded: ${fonts.loaded.join(', ') || 'none'}`);
-  record('Headings use Anek, body uses Mukta', fonts.h1.startsWith('"Anek Latin Variable"') && fonts.body.startsWith('Mukta'), `h1: ${fonts.h1} | body: ${fonts.body}`);
-
-  // Keyboard: the first Tab must land on something with a visible focus ring.
-  await page.keyboard.press('Tab');
-  const focus = await page.evaluate(() => {
-    const el = document.activeElement;
-    return el && el !== document.body ? { tag: el.tagName, shadow: getComputedStyle(el).boxShadow } : null;
-  });
-  record('Keyboard focus is visible', Boolean(focus && focus.shadow && focus.shadow !== 'none'), focus ? `${focus.tag}: ${focus.shadow}` : 'nothing focused');
-
-  record('No errors in the browser console', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
-  if (saveLook) await shot(page, 'home-laptop');
-  if (results.some((r) => !r.ok)) await shot(page, 'FAILED-home-laptop');
-  await context.close();
+async function overflowOf(page) {
+  return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
 
-// Phone width: nothing may stick out sideways
-{
-  const { context, page } = await openPage(375, 740);
-  await page.goto(base + '/', { waitUntil: 'networkidle' });
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  record('Phone width (375px): no sideways scrolling', overflow <= 0, `${overflow}px too wide`);
-  if (saveLook || overflow > 0) await shot(page, overflow > 0 ? 'FAILED-home-phone' : 'home-phone');
-  await context.close();
+try {
+  await mongo.connect();
+
+  // ====================== 1. Public pages ======================
+  section = 'Public pages';
+  {
+    const { context, page, consoleErrors } = await openPage();
+    await page.goto(base + '/', { waitUntil: 'networkidle' });
+
+    const title = await page.title();
+    record('Page title is "TripSync"', title === 'TripSync', `got "${title}"`);
+
+    const favicon = await page.getAttribute('link[rel="icon"]', 'href');
+    const faviconRes = favicon ? await page.request.get(new URL(favicon, base).href) : null;
+    record('Own favicon is served', faviconRes?.ok() && favicon.endsWith('.svg'), favicon || 'no <link rel=icon>');
+
+    const h1 = await page.locator('h1').innerText();
+    record('Landing page shows its headline', /WhatsApp chat/.test(h1), `h1 "${h1}"`);
+
+    const fonts = await page.evaluate(async () => {
+      await document.fonts.ready;
+      const loaded = [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/"/g, ''));
+      return {
+        loaded: [...new Set(loaded)],
+        h1: getComputedStyle(document.querySelector('h1')).fontFamily,
+        body: getComputedStyle(document.body).fontFamily,
+      };
+    });
+    record('Anek Latin and Mukta are loaded', fonts.loaded.includes('Anek Latin Variable') && fonts.loaded.includes('Mukta'), `loaded: ${fonts.loaded.join(', ') || 'none'}`);
+    record('Headings use Anek, body uses Mukta', fonts.h1.startsWith('"Anek Latin Variable"') && fonts.body.startsWith('Mukta'), `h1: ${fonts.h1} | body: ${fonts.body}`);
+
+    await page.keyboard.press('Tab');
+    const focus = await page.evaluate(() => {
+      const el = document.activeElement;
+      return el && el !== document.body ? { tag: el.tagName, shadow: getComputedStyle(el).boxShadow } : null;
+    });
+    record('Keyboard focus is visible', focus && focus.shadow && focus.shadow !== 'none', focus ? `${focus.tag}: ${focus.shadow}` : 'nothing focused');
+
+    record('No script errors on the landing page', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+    if (saveLook) await shot(page, 'landing-laptop');
+
+    await page.goto(base + '/status', { waitUntil: 'networkidle' });
+    await page.getByText(/answered in \d+ ms/i).nth(1).waitFor({ timeout: 30000 }).catch(() => {});
+    const statusText = (await page.locator('ul').innerText()).replace(/\s+/g, ' ');
+    record('/status shows the API and the database answering', /Passed: Answered in \d+ ms/.test(statusText) && /Passed: tripsync_dev on MongoDB Atlas/.test(statusText), statusText);
+
+    const res = await page.goto(base + '/no/such/road', { waitUntil: 'networkidle' });
+    const nf = await page.locator('h1').innerText().catch(() => '');
+    record('Unknown address shows the TripSync not-found page', res.status() === 200 && /does not go anywhere/.test(nf), `HTTP ${res.status()}, h1 "${nf}"`);
+    if (saveLook) await shot(page, 'not-found');
+    await context.close();
+  }
+
+  // ====================== 2. API guard (must fail) ======================
+  section = 'API guard';
+  {
+    const ping = await call('GET', '/health/ping');
+    record('GET /health/ping answers without the database', ping.status === 200 && ping.data?.status === 'ok' && !('mongo' in ping.data), `HTTP ${ping.status}`);
+    const health = await call('GET', '/health');
+    record('GET /health reaches MongoDB', health.status === 200 && health.data?.mongo === 'connected', `HTTP ${health.status}`);
+    const noRoute = await call('GET', '/no-such-route');
+    record('Unknown API route gives 404 with { error }', noRoute.status === 404 && hasError(noRoute), `HTTP ${noRoute.status}`);
+
+    const none = await call('GET', '/users/me');
+    record('No token: 401', none.status === 401 && hasError(none), `HTTP ${none.status}`);
+    const garbage = await call('GET', '/users/me', { token: 'abc.def.ghi' });
+    record('Garbage token: 401', garbage.status === 401 && hasError(garbage), `HTTP ${garbage.status}`);
+    const wrongScheme = await call('GET', '/users/me', { headers: { Authorization: 'Basic dXNlcjpwYXNz' } });
+    record('Wrong auth scheme (Basic): 401', wrongScheme.status === 401, `HTTP ${wrongScheme.status}`);
+
+    // alg "none": an unsigned token claiming to be any user
+    const enc = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const nowS = Math.floor(Date.now() / 1000);
+    const claims = { iss: `https://securetoken.google.com/${PROJECT_ID}`, aud: PROJECT_ID, sub: 'forged-user', iat: nowS, exp: nowS + 3600, auth_time: nowS };
+    const unsigned = await call('GET', '/users/me', { token: `${enc({ alg: 'none', typ: 'JWT' })}.${enc(claims)}.x` });
+    record('Unsigned token (alg "none"): 401', unsigned.status === 401, `HTTP ${unsigned.status}`);
+
+    // Forged: correct project, issuer and a real Google key id, but signed with OUR key
+    const jwks = await (await fetch('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')).json();
+    const { privateKey } = await generateKeyPair('RS256');
+    const forged = await new SignJWT(claims).setProtectedHeader({ alg: 'RS256', kid: jwks.keys[0].kid }).sign(privateKey);
+    const forgedRes = await call('GET', '/users/me', { token: forged });
+    record('Forged token (right claims, wrong signature): 401', forgedRes.status === 401, `HTTP ${forgedRes.status}`);
+  }
+
+  // ====================== 3. Profile API with a real account ======================
+  section = 'Profile API';
+  {
+    const account = newAccount('api');
+    const signUp = await firebase('signUp', { ...account, returnSecureToken: true });
+    const token = signUp.idToken;
+    const uid = signUp.localId;
+
+    // Edited token: a real token with the user id changed after Google signed it
+    const [h, p, s] = token.split('.');
+    const payload = JSON.parse(Buffer.from(p, 'base64url').toString());
+    const edited = Buffer.from(JSON.stringify({ ...payload, sub: 'someone-else' })).toString('base64url');
+    const editedRes = await call('GET', '/users/me', { token: `${h}.${edited}.${s}` });
+    record('Real token edited after signing: 401', editedRes.status === 401, `HTTP ${editedRes.status}`);
+
+    const before = await call('GET', '/users/me', { token });
+    record('New Firebase user, no profile yet: GET /users/me gives 404', before.status === 404 && hasError(before), `HTTP ${before.status}`);
+
+    const bad = [
+      ['empty body', {}],
+      ['empty name', { name: '   ' }],
+      ['name over 60 characters', { name: 'x'.repeat(61) }],
+      ['name is not text', { name: { $gt: '' } }],
+      ['extra field (email)', { name: 'Check', email: 'boss@example.com' }],
+    ];
+    for (const [label, body] of bad) {
+      const r = await call('POST', '/users/me', { token, body });
+      record(`POST /users/me with ${label}: 400`, r.status === 400 && hasError(r), `HTTP ${r.status} ${r.data?.error ?? ''}`);
+    }
+    const notJson = await call('POST', '/users/me', { token, rawBody: '{"name":' });
+    record('POST /users/me with broken JSON: 400', notJson.status === 400 && hasError(notJson), `HTTP ${notJson.status}`);
+    const arr = await call('POST', '/users/me', { token, body: ['Dhruv'] });
+    record('POST /users/me with a list instead of an object: 400', arr.status === 400, `HTTP ${arr.status}`);
+
+    const created = await call('POST', '/users/me', { token, body: { name: '  Dhruv Grover  ' } });
+    record('POST /users/me creates the profile: 201', created.status === 201 && created.data?.user?.uid === uid && created.data.user.name === 'Dhruv Grover', `HTTP ${created.status} ${JSON.stringify(created.data?.user ?? created.data)}`);
+    record('Email comes from the token, not the request', created.data?.user?.email === account.email, `email ${created.data?.user?.email}`);
+
+    const again = await call('POST', '/users/me', { token, body: { name: 'Someone Else' } });
+    record('POST again returns the same profile unchanged: 200', again.status === 200 && again.data?.user?.name === 'Dhruv Grover' && again.data.user.createdAt === created.data?.user?.createdAt, `HTTP ${again.status} name ${again.data?.user?.name}`);
+
+    const after = await call('GET', '/users/me', { token });
+    record('GET /users/me now gives the profile: 200', after.status === 200 && after.data?.user?.uid === uid, `HTTP ${after.status}`);
+    record('Response hides MongoDB internals (no _id)', after.data?.user && !('_id' in after.data.user), JSON.stringify(after.data?.user));
+
+    const docs = await users().find({ firebaseUid: uid }).toArray();
+    record('MongoDB holds exactly one profile for this user', docs.length === 1 && docs[0].email === account.email && docs[0].createdAt instanceof Date, `${docs.length} document(s)`);
+  }
+
+  // ====================== 4. Sign-up / log-in story in the browser ======================
+  section = 'Browser story';
+  {
+    const account = newAccount('web');
+    const name = 'Ashish Bisht';
+    const { context, page, consoleErrors } = await openPage();
+
+    await page.goto(base + '/trips', { waitUntil: 'networkidle' });
+    record('Logged out, /trips sends you to log in (and remembers /trips)', page.url() === `${base}/login?next=%2Ftrips`, page.url());
+
+    await page.goto(base + '/register', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Create my account' }).click();
+    const invalid = await page.locator('[aria-invalid="true"]').count();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('aria-invalid') === 'true', null, { timeout: 2000 }).catch(() => {});
+    const focusedLabel = await page.evaluate(() => document.activeElement?.labels?.[0]?.innerText ?? '');
+    record('Empty sign-up form: an error on each of the 3 fields', invalid === 3, `${invalid} fields marked`);
+    record('...and focus jumps to the first field with an error', focusedLabel === 'Your name', `focused "${focusedLabel}"`);
+    if (saveLook) await shot(page, 'register-errors');
+
+    await page.getByLabel('Your name').fill(name);
+    await page.getByLabel('Email').fill(account.email);
+    await page.getByLabel('Password', { exact: true }).fill('short');
+    await page.getByRole('button', { name: 'Create my account' }).click();
+    const pwError = await page.locator('[aria-invalid="true"]').count();
+    record('Password under 8 characters is refused before sending', pwError === 1, `${pwError} fields marked`);
+
+    await page.getByLabel('Password', { exact: true }).fill(account.password);
+    await page.getByRole('button', { name: 'Create my account' }).click();
+    const reachedTrips = await page.waitForURL(`${base}/trips`, { timeout: 25000 }).then(() => true, () => false);
+    const headerText = reachedTrips ? await page.locator('header').innerText() : '';
+    record('Sign-up lands on /trips with your name in the header', reachedTrips && headerText.includes(name), reachedTrips ? headerText.replace(/\s+/g, ' ') : page.url());
+
+    const doc = await users().findOne({ email: account.email });
+    record('Sign-up created the MongoDB profile with the typed name', doc?.name === name && typeof doc.firebaseUid === 'string', doc ? `name "${doc.name}"` : 'no document');
+
+    const empty = reachedTrips ? await page.getByRole('heading', { name: 'No trips yet' }).count() : 0;
+    record('/trips shows the designed empty state', empty === 1, `${empty} heading(s)`);
+    if (saveLook) await shot(page, 'trips-laptop');
+
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.locator('header').getByText(name).waitFor({ timeout: 15000 }).catch(() => {});
+    record('Refresh keeps you logged in', page.url() === `${base}/trips` && (await page.locator('header').getByText(name).count()) === 1, page.url());
+
+    await page.goto(base + '/login?next=//evil.example', { waitUntil: 'networkidle' });
+    await page.waitForURL(`${base}/trips`, { timeout: 10000 }).catch(() => {});
+    record('Login link pointing to another site stays inside TripSync', page.url() === `${base}/trips`, page.url());
+
+    await page.getByRole('button', { name: 'Log out' }).click();
+    const loggedOut = await page.waitForURL(`${base}/`, { timeout: 10000 }).then(() => true, () => false);
+    await page.goto(base + '/trips', { waitUntil: 'networkidle' });
+    record('Log out works, and /trips is closed again', loggedOut && page.url().startsWith(`${base}/login`), page.url());
+
+    // Now on /login?next=%2Ftrips
+    await page.getByLabel('Email').fill(account.email);
+    await page.getByLabel('Password', { exact: true }).fill('not-the-password');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    const formError = await page.getByRole('alert').innerText({ timeout: 15000 }).catch(() => '');
+    record('Wrong password: a clear message on the form', /email or password is wrong/.test(formError), `"${formError}"`);
+    if (saveLook) await shot(page, 'login-wrong-password');
+
+    await page.getByLabel('Password', { exact: true }).fill(account.password);
+    await page.getByRole('button', { name: 'Log in' }).click();
+    const back = await page.waitForURL(`${base}/trips`, { timeout: 20000 }).then(() => true, () => false);
+    record('Log in returns you to the page you wanted (/trips)', back, page.url());
+
+    await page.getByRole('button', { name: 'Log out' }).click();
+    await page.waitForURL(`${base}/`, { timeout: 10000 }).catch(() => {});
+    await page.goto(base + '/register', { waitUntil: 'networkidle' });
+    await page.getByLabel('Your name').fill('Second Copy');
+    await page.getByLabel('Email').fill(account.email);
+    await page.getByLabel('Password', { exact: true }).fill(account.password);
+    await page.getByRole('button', { name: 'Create my account' }).click();
+    const dup = await page.locator('[aria-invalid="true"]').first().waitFor({ timeout: 15000 }).then(
+      () => page.locator('p', { hasText: 'already exists' }).count(),
+      () => 0,
+    );
+    record('Signing up twice with one email: "already exists" on the email field', dup === 1, `${dup} message(s)`);
+
+    record('No script errors during the whole story', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+    if (results.some((r) => r.section === section && !r.ok)) await shot(page, 'FAILED-browser-story');
+
+    // Phone width, logged in and out
+    await context.close();
+    const phone = await openPage(375, 740);
+    for (const route of ['/', '/login', '/register', '/status', '/no/such/road']) {
+      await phone.page.goto(base + route, { waitUntil: 'networkidle' });
+      const extra = await overflowOf(phone.page);
+      record(`Phone width (375px), ${route}: no sideways scrolling`, extra <= 0, `${extra}px too wide`);
+      if (extra > 0) await shot(phone.page, `FAILED-phone${route.replace(/\//g, '_')}`);
+      if (saveLook && route === '/') await shot(phone.page, 'landing-phone');
+    }
+    await phone.page.goto(base + '/login', { waitUntil: 'networkidle' });
+    await phone.page.getByLabel('Email').fill(account.email);
+    await phone.page.getByLabel('Password', { exact: true }).fill(account.password);
+    await phone.page.getByRole('button', { name: 'Log in' }).click();
+    await phone.page.waitForURL(`${base}/trips`, { timeout: 20000 }).catch(() => {});
+    const extra = await overflowOf(phone.page);
+    record('Phone width (375px), /trips logged in: no sideways scrolling', phone.page.url() === `${base}/trips` && extra <= 0, `${phone.page.url()} ${extra}px`);
+    if (saveLook) await shot(phone.page, 'trips-phone');
+    await phone.context.close();
+  }
+} catch (err) {
+  record('The check itself ran to the end', false, err.stack?.split('\n').slice(0, 2).join(' ') ?? String(err));
+} finally {
+  // Clean up: delete every throwaway Firebase account and its MongoDB profile.
+  section = 'Clean-up';
+  let removed = 0;
+  for (const account of testAccounts) {
+    try {
+      const { idToken, localId } = await firebase('signInWithPassword', { ...account, returnSecureToken: true });
+      await users().deleteMany({ firebaseUid: localId });
+      await firebase('delete', { idToken });
+      removed++;
+    } catch (err) {
+      record(`Delete test account ${account.email}`, false, err.message);
+    }
+  }
+  if (testAccounts.length) record(`Test accounts deleted from Firebase and MongoDB`, removed === testAccounts.length, `${removed}/${testAccounts.length}`);
+  await browser.close();
+  await mongo.close();
 }
 
-// Deep link and unknown address: the app loads and shows its own not-found page
-{
-  const { context, page } = await openPage(1366, 800);
-  const res = await page.goto(base + '/no/such/road', { waitUntil: 'networkidle' });
-  const heading = await page.locator('h1').innerText().catch(() => '');
-  record('Unknown address shows the TripSync not-found page', res.status() === 200 && /does not go anywhere/.test(heading), `HTTP ${res.status()}, h1 "${heading}"`);
-  if (saveLook) await shot(page, 'not-found');
-  await context.close();
-}
-
-// API contract: unknown API routes answer with JSON { error }
-{
-  const res = await fetch(base + '/api/no-such-route');
-  const body = await res.json().catch(() => null);
-  record('Unknown API route gives 404 with { error }', res.status === 404 && typeof body?.error === 'string', `HTTP ${res.status}`);
-}
-
-await browser.close();
-
-// Report
+// ---------- print the report ----------
 const failed = results.filter((r) => !r.ok);
-console.log(`\nTripSync browser check: ${base}`);
+console.log(`\nTripSync check: ${base}`);
+let last = '';
 for (const r of results) {
-  console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.ok ? '' : `  (${r.detail})`}`);
+  if (r.section !== last) {
+    console.log(`\n  ${r.section}`);
+    last = r.section;
+  }
+  console.log(`    ${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.ok ? '' : `  (${r.detail})`}`);
 }
-console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `. Screenshots of failures are in checks/.artifacts` : ''}${saveLook ? '. Look screenshots are in checks/.artifacts' : ''}\n`);
+console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? '. Screenshots of failures are in checks/.artifacts' : ''}${saveLook ? '. Look screenshots are in checks/.artifacts' : ''}\n`);
 process.exit(failed.length ? 1 : 0);

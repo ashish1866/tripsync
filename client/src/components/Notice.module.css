@@ -1,0 +1,44 @@
+.notice {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--stone);
+}
+
+.warning {
+  border-color: var(--signal);
+  background: var(--signal-wash);
+}
+
+/* The red-bordered triangle of an Indian road warning sign */
+.sign {
+  flex: none;
+  position: relative;
+  width: 1.5rem;
+  height: 1.3rem;
+  margin-top: 0.15rem;
+  background: var(--signal);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.sign::after {
+  content: '';
+  position: absolute;
+  inset: 0.42rem 0.36rem 0.2rem;
+  background: var(--stone);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.title {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 700;
+}
+
+.body > :last-child {
+  margin-bottom: 0;
+}

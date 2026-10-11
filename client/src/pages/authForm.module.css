@@ -1,0 +1,10 @@
+/* Shared by Register.jsx and Login.jsx */
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.submit {
+  justify-self: start;
+  margin-top: var(--space-2);
+}

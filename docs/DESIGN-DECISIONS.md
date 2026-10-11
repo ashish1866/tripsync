@@ -49,11 +49,12 @@ Later, for budget categories, the chart takes its colours from the real kilometr
 
 The trip page opens on the route: the row of day stones across the top. That answers the first question anyone in the group asks ("what are we doing on which day, and will it rain?") before anything else. Picking a stone opens that day's stops beside the map on a laptop, or below it on a phone. Money lives in its own ledger view, because settling up is a separate moment from planning.
 
-The landing page does not use the hero template. It is built on one large stone carrying the product name, and explains TripSync in plain sentences. Details will be logged when it is built in Step 1.
+The landing page does not use the hero template. It opens with a left-aligned statement of the actual problem ("For the group trip that currently lives in a WhatsApp chat") and two plain sentences on what TripSync does. Then it shows the product's own shape instead of feature cards: a road of four day stones for an example Manali trip, one carrying a rain warning, and a ledger slip with the brief's real settle-up maths (Ankit, Rohan and Rahul paying Ashish). Both are labelled "Example" on screen. On a phone, the road scrolls sideways with the next stone peeking in, which is how the trip page will behave.
 
 ## 6. Default-ban items used, with reasons
 
-- **D10, uppercase:** Place names and day markers painted on stones use condensed uppercase, because that is how real milestones are lettered. Uppercase is used only on stone lettering, never for small label text above headings.
+- **D10, uppercase:** Place names and day markers painted on stones use condensed uppercase, because that is how real milestones are lettered. The TRIPSYNC wordmark uses the same lettering because it is the name on the stone. Uppercase is used only on stone lettering, never for small label text above headings.
+- **Hard offset edge (close to D4's "brutalist costume", so flagged for Ashish):** Buttons and boards (the forms, the ledger slip) have a solid ink edge offset down and right, instead of a soft shadow. Reason: they are meant as painted boards standing off the ground, the same way each stone sits on a thick 6px base. It is used only on things that stand up (buttons, boards, stones), never on text, lists or the page frame. If Ashish reads it as a trend look, the fallback is to drop the offset and keep the 2px ink outline alone.
 
 ## 7. What I deliberately did not do
 
@@ -69,7 +70,12 @@ The landing page does not use the hero template. It is built on one large stone 
 
 - **Build check (`/`, Step 0 only):** one large stone, "TripSync / 0 km from the start", next to a plain board of four checks (website, typefaces, API, database). Status marks follow the sign language: solid ink square means passed, red triangle means failed, dashed square means still checking. The Step 1 landing page replaces it.
 - **Not found (`*`):** a small "No road / 404" stone and one sentence saying what happened, plus a button back home.
+- **Sign up / log in:** one form on a whitewashed board, set left of centre like a roadside sign rather than a centred modal. Field errors sit under their field with the warning-sign triangle, and focus jumps to the first one. Passwords have a Show button for typing on phones. After logging in, `?next=` brings you back to the page you opened (needed for invite links in Step 5); only TripSync paths are accepted.
+- **Your trips (empty state):** an unpainted stone (dashed outline) and a sentence saying where trips will appear. Not a grey icon with "No data found".
+- **Loading:** a short strip of road whose dashed centre line moves, plus a sentence saying what we are waiting for ("Checking your login"). It stands still under reduced motion. A button that is working stays solid, sinks in, and shows the same moving dash along its bottom.
+- **Service status (`/status`):** the Step 0 build check, kept as a plain page that shows whether the API and database answer. Useful before a demo once the API sleeps on Render.
 
 ## Change log
 
+- 2026-10-11, Step 1: landing page, sign-up and log-in forms, shared TextField, Notice, RoadLoader, AppHeader and Wordmark components, trips empty state, `/status`. Logged the hard offset edge as a near-D4 choice for Ashish to judge.
 - 2026-10-11, Step 0: first entry. Kilometre-stone direction, Anek plus Mukta, stone/ink/cap/signal palette, plain CSS with tokens. Shared `Milestone` and `Button` components. Buttons have a hard 3px ink offset instead of a soft shadow; pressing one sinks it onto that edge.

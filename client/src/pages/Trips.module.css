@@ -1,0 +1,40 @@
+.page {
+  padding: var(--space-6) var(--page-gutter) var(--space-8);
+}
+
+.since {
+  color: var(--ink-muted);
+}
+
+.empty {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  max-width: 48rem;
+  margin-top: var(--space-6);
+}
+
+.emptyText {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.empty h2 {
+  font-size: var(--text-xl);
+}
+
+/* Same shape as a Milestone, but only dashed paint marks: nothing here yet */
+.blankStone {
+  width: 9rem;
+  height: 11rem;
+  flex: none;
+  border: 3px dashed var(--ink);
+  border-bottom: 6px solid var(--ink);
+  border-radius: var(--radius-dome);
+}
+
+.note {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}

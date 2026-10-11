@@ -1,30 +1,20 @@
-.page {
-  display: grid;
-  grid-template-columns: auto minmax(0, 36rem);
-  justify-content: start; /* keep spare width on the right, not between stone and board */
-  align-items: end;
-  gap: var(--space-8);
-  min-height: 100vh;
-  padding: var(--space-7) clamp(var(--space-4), 6vw, var(--space-8));
+.header {
+  padding: var(--space-4) var(--page-gutter);
 }
 
-.stoneColumn {
-  align-self: end;
-}
-
-.board {
-  padding-bottom: var(--space-2);
+.main {
+  max-width: 40rem;
+  padding: var(--space-6) var(--page-gutter) var(--space-8);
 }
 
 .lead {
   font-size: var(--text-lg);
   line-height: 1.4;
-  max-width: 34rem;
 }
 
 .checks {
   list-style: none;
-  margin: var(--space-6) 0;
+  margin: var(--space-5) 0;
   padding: 0;
   background: var(--stone);
   border: var(--line);
@@ -33,7 +23,7 @@
 
 .check {
   display: grid;
-  grid-template-columns: 1.25rem 7rem minmax(0, 1fr);
+  grid-template-columns: 1.25rem 6rem minmax(0, 1fr);
   align-items: baseline;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
@@ -53,7 +43,7 @@
   color: var(--ink-muted);
 }
 
-/* Status mark: ink square = passed, red triangle = failed, dashed square = in progress */
+/* Solid ink square = passed, red triangle = failed, dashed square = checking */
 .mark {
   width: 0.9rem;
   height: 0.9rem;
@@ -85,14 +75,7 @@
   }
 }
 
-@media (max-width: 52rem) {
-  .page {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    gap: var(--space-6);
-    padding-top: var(--space-6);
-  }
-
+@media (max-width: 34rem) {
   .check {
     grid-template-columns: 1.25rem minmax(0, 1fr);
   }

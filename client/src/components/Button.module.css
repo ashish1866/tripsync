@@ -15,6 +15,7 @@
   line-height: 1.1;
   color: var(--ink);
   text-decoration: none;
+  white-space: nowrap; /* labels are short; a two-line button reads as broken */
   cursor: pointer;
   transition:
     transform var(--fast) var(--ease),
@@ -37,12 +38,30 @@
   box-shadow: var(--lift), var(--focus);
 }
 
-.button:disabled,
-.button[aria-busy='true'] {
+.button:disabled {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
   opacity: 0.6;
+}
+
+/* Working: stays solid (it is not "unavailable"), pressed in, with a moving centre line */
+.button.busy {
+  opacity: 1;
+  cursor: progress;
+  transform: translate(3px, 3px);
+  box-shadow: none;
+  background-image: repeating-linear-gradient(90deg, var(--ink) 0 0.6rem, transparent 0.6rem 1rem);
+  background-size: 1rem 3px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  animation: working 0.6s linear infinite;
+}
+
+@keyframes working {
+  to {
+    background-position: -1rem 100%;
+  }
 }
 
 .primary {

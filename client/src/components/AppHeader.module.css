@@ -1,0 +1,56 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--page-gutter);
+  background: var(--stone);
+  border-bottom: var(--line);
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.who {
+  display: grid;
+  justify-items: end;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.name {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.email {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 34rem) {
+  .account {
+    gap: var(--space-3);
+  }
+
+  .email {
+    display: none;
+  }
+
+  .name {
+    max-width: 7rem;
+  }
+}

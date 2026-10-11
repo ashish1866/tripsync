@@ -3,6 +3,6 @@
 MONGODB_URI=
 GEOAPIFY_KEY=
 
-# Not secret. Also set in wrangler.jsonc; repeated here so `npm run dev:node` works too.
+# Not secret, but the API needs them.
 FIREBASE_PROJECT_ID=tripsync-d3e9b
 MONGODB_DB=tripsync_dev

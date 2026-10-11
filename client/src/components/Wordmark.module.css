@@ -1,0 +1,29 @@
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.mark {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+}
+
+.name {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  font-size: var(--text-xl);
+  line-height: 1;
+  white-space: nowrap;
+  text-transform: uppercase; /* milestone lettering, see DESIGN-DECISIONS D10 */
+}
+
+.wordmark:hover .name {
+  text-decoration: underline;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+}

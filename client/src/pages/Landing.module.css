@@ -1,0 +1,241 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--page-gutter);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.navLink {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* Opening statement: left-aligned and wide, like a route board */
+.intro {
+  padding: var(--space-7) var(--page-gutter) var(--space-7);
+  max-width: 62rem;
+}
+
+.title {
+  font-size: clamp(2.5rem, 6.4vw, 5rem);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.01em;
+  max-width: 15ch;
+  margin-bottom: var(--space-5);
+}
+
+.lead {
+  font-size: var(--text-lg);
+  line-height: 1.45;
+  max-width: 40rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+/* The road: stones standing on a kerb line, the same row the trip page opens on */
+.route {
+  display: grid;
+  grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: end;
+  padding: var(--space-6) var(--page-gutter) var(--space-7);
+  background: var(--stone);
+  border-top: var(--line);
+  border-bottom: var(--line);
+}
+
+.exampleLabel {
+  margin: 0;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  color: var(--ink-muted);
+}
+
+.road {
+  /* Contains the screen-reader-only text, so it scrolls with the road
+     instead of stretching the whole page sideways. */
+  position: relative;
+  display: flex;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+.stop {
+  flex: 0 0 10rem;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  scroll-snap-align: start;
+}
+
+/* The kerb the stones stand on: each stop draws its piece of the line,
+   reaching across the gap to the next stop so it reads as one road edge. */
+.post {
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 3px solid var(--ink);
+  margin-right: calc(-1 * var(--space-5));
+}
+
+.stop:last-child .post {
+  margin-right: 0;
+}
+
+.plan {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.rain {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  margin: 0;
+  color: var(--signal);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  line-height: 1.3;
+}
+
+.rain::before {
+  content: '';
+  flex: none;
+  width: 0.8rem;
+  height: 0.7rem;
+  background: var(--signal);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+/* Money: explanation on the left, a ledger slip on the right */
+.money {
+  display: grid;
+  grid-template-columns: minmax(0, 26rem) minmax(0, 30rem);
+  gap: var(--space-7);
+  align-items: start;
+  padding: var(--space-7) var(--page-gutter);
+}
+
+.ledger {
+  margin: 0;
+  padding: var(--space-5);
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+
+.ledgerNote {
+  margin-bottom: var(--space-4);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.payments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--line);
+}
+
+.payment {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: var(--line-thin);
+  font-size: var(--text-md);
+}
+
+.amount {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  font-size: var(--text-xl);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ledgerTotal {
+  margin: var(--space-3) 0 0;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+}
+
+.footer {
+  margin-top: auto;
+  padding: var(--space-5) var(--page-gutter);
+  border-top: var(--line);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.footer p {
+  margin: 0;
+}
+
+@media (max-width: 56rem) {
+  .route,
+  .money {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+}
+
+@media (max-width: 34rem) {
+  .nav {
+    gap: var(--space-3);
+  }
+
+  .navCta {
+    display: none;
+  }
+
+  .intro {
+    padding-top: var(--space-5);
+  }
+
+  /* The road runs off the right edge, so the next stone peeks in and shows the row scrolls */
+  .road {
+    gap: var(--space-4);
+    margin-right: calc(-1 * var(--page-gutter));
+    padding-right: var(--page-gutter);
+  }
+
+  .stop {
+    flex-basis: 9rem;
+  }
+
+  .post {
+    margin-right: calc(-1 * var(--space-4));
+  }
+}

@@ -38,6 +38,7 @@
   --space-6: 2rem;
   --space-7: 3rem;
   --space-8: 4.5rem;
+  --page-gutter: clamp(1rem, 5vw, 4.5rem); /* left/right page margin on every screen */
 
   /* Shape: painted stone is flat. Edges are ink lines, not shadows. */
   --line: 2px solid var(--ink);

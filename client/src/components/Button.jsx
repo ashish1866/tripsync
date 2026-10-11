@@ -4,8 +4,18 @@ import styles from './Button.module.css';
 // The one button used across TripSync.
 // variant: "primary" (yellow cap), "plain" (stone), "danger" (red, for deleting).
 // Pass `to` to render a router link that looks like a button.
-export default function Button({ variant = 'primary', to, busy = false, children, className = '', ...rest }) {
-  const classes = `${styles.button} ${styles[variant]} ${className}`;
+// `busy` shows the button as working and blocks a second click.
+export default function Button({
+  variant = 'primary',
+  to,
+  busy = false,
+  disabled = false,
+  type = 'button',
+  children,
+  className = '',
+  ...rest
+}) {
+  const classes = `${styles.button} ${styles[variant]} ${busy ? styles.busy : ''} ${className}`;
 
   if (to) {
     return (
@@ -16,7 +26,7 @@ export default function Button({ variant = 'primary', to, busy = false, children
   }
 
   return (
-    <button className={classes} disabled={busy || rest.disabled} aria-busy={busy || undefined} {...rest}>
+    <button type={type} className={classes} disabled={busy || disabled} aria-busy={busy || undefined} {...rest}>
       {children}
     </button>
   );

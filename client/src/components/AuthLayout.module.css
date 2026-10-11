@@ -1,0 +1,58 @@
+.page {
+  min-height: 100vh;
+}
+
+.header {
+  padding: var(--space-4) var(--page-gutter);
+}
+
+.main {
+  width: min(30rem, 100%);
+  padding: var(--space-6) var(--page-gutter) var(--space-8);
+  /* Sits left of centre, like a sign on the roadside rather than a modal */
+  margin-left: clamp(0rem, 12vw, 12rem);
+  box-sizing: content-box;
+}
+
+.title {
+  font-size: var(--text-3xl);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  margin-bottom: var(--space-2);
+}
+
+.intro {
+  font-size: var(--text-lg);
+  line-height: 1.4;
+  margin-bottom: var(--space-5);
+}
+
+/* The form sits on a whitewashed board with a hard ink edge */
+.board {
+  padding: var(--space-5);
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+
+.footer {
+  margin-top: var(--space-5);
+}
+
+@media (max-width: 40rem) {
+  .main {
+    width: auto;
+    margin-left: 0;
+    padding-top: var(--space-4);
+  }
+
+  .title {
+    font-size: var(--text-2xl);
+  }
+
+  .board {
+    padding: var(--space-4);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+}
