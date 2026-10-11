@@ -31,19 +31,115 @@ export async function addMember(ctx, tripId, user, role) {
   await ctx.db.collection('trips').updateOne({ _id: new ObjectId(tripId) }, { $push: { members: { uid: user.uid, role, joinedAt: new Date() } } });
 }
 
-const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks];
+const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks, exploreChecks];
+
+// ====================== Step 7: explore nearby places ======================
+async function exploreChecks(ctx) {
+  const { call, record, hasError, db } = ctx;
+  ctx.setSection('Explore API');
+  const places = db.collection('places');
+  const KEY = 'cafe|32.26,77.17|5000';
+
+  const owner = await ctx.newUser('xowner', 'Ashish Check');
+  const viewer = await ctx.newUser('xviewer', 'Rohan Check');
+  const stranger = await ctx.newUser('xstranger', 'Ankit Check');
+  const trip = await makeTrip(ctx, owner);
+  await addMember(ctx, trip.id, viewer, 'viewer');
+  const t = `/trips/${trip.id}`;
+
+  // Forget only this one search, so the first call below must go to Geoapify.
+  await places.updateMany({ searchKeys: KEY }, { $pull: { searchKeys: KEY } });
+  const first = await call('GET', `${t}/places?category=cafe&radius=5000`, { token: viewer.token });
+  const list = first.data?.places || [];
+  record('Cafes near Manali appear (asked Geoapify), each with a name, address and distance', first.status === 200 && first.data.source === 'geoapify' && list.length >= 5 && list.every((p) => p.name && typeof p.distance === 'number' && p.distance <= 5000 && p.category === 'cafe'), `HTTP ${first.status} ${first.data?.error ?? `source ${first.data?.source}, ${list.length} places: ${list.slice(0, 3).map((p) => p.name).join(', ')}`}`);
+  record('Nearest first, distance in whole metres, location [longitude, latitude]', list.every((p, i) => i === 0 || p.distance >= list[i - 1].distance) && list.every((p) => Number.isInteger(p.distance) && Math.abs(p.location[0] - 77.17) < 0.1 && Math.abs(p.location[1] - 32.26) < 0.1), JSON.stringify(list.slice(0, 2)));
+  record('No ratings in the answer', list.every((p) => !('rating' in p) && !('stars' in p)), Object.keys(list[0] || {}).join(','));
+  const stored = await places.countDocuments({ searchKeys: KEY });
+  const dupes = await places.aggregate([{ $match: { searchKeys: KEY } }, { $group: { _id: '$placeId', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]).toArray();
+  record('The places are saved in the places collection, one document per place', stored >= list.length && dupes.length === 0, `${stored} stored for ${list.length} shown, ${dupes.length} duplicates`);
+
+  const second = await call('GET', `${t}/places?category=cafe&radius=5000`, { token: owner.token });
+  const sameList = JSON.stringify(second.data?.places?.map((p) => p.placeId)) === JSON.stringify(list.map((p) => p.placeId));
+  record('A second search for the same area uses the cache (no Geoapify call), same places', second.data?.source === 'cache' && sameList, `source ${second.data?.source}, same list ${sameList}`);
+  const other = await makeTrip(ctx, viewer, { name: 'Manali, second group' });
+  const shared = await call('GET', `/trips/${other.id}/places?category=cafe&radius=5000`, { token: viewer.token });
+  record("Another group's trip to Manali shares the same cached cafes", shared.data?.source === 'cache', `source ${shared.data?.source}`);
+
+  const hotels = await call('GET', `${t}/places?category=hotel&radius=2000`, { token: owner.token });
+  record('Places to stay within 2 km: their own search, every one within 2 km', hotels.status === 200 && hotels.data.places.every((p) => p.category === 'hotel' && p.distance <= 2000), `HTTP ${hotels.status} ${hotels.data?.places?.length} places`);
+  const badCat = await call('GET', `${t}/places?category=petrol&radius=5000`, { token: owner.token });
+  const badRadius = await call('GET', `${t}/places?category=cafe&radius=3000`, { token: owner.token });
+  record('An unknown category or distance: 400', badCat.status === 400 && badRadius.status === 400 && hasError(badCat), `${badCat.status}/${badRadius.status}`);
+  const strangerAsk = await call('GET', `${t}/places?category=cafe&radius=5000`, { token: stranger.token });
+  record('A stranger asking for the trip\'s places: 403', strangerAsk.status === 403, `HTTP ${strangerAsk.status}`);
+
+  // ---------- in the browser ----------
+  ctx.setSection('Explore in the browser');
+  const traveller = await ctx.newUser('xweb', 'Ashish Bisht');
+  const webTrip = await makeTrip(ctx, traveller);
+  const { context, page, consoleErrors } = await ctx.openPage();
+  await ctx.login(page, traveller);
+  await page.goto(`${ctx.base}/trips/${webTrip.id}/explore`, { waitUntil: 'networkidle' });
+  const results = page.getByRole('list', { name: 'Cafes near Manali' });
+  const shown = await results.waitFor({ timeout: 20000 }).then(() => results.getByRole('listitem').count(), () => 0);
+  const placePins = await page.locator('.ts-pin-place').count();
+  record('Explore opens on cafes near Manali, with a numbered ink-capped pin for each', shown >= 5 && placePins === shown, `${shown} cafes, ${placePins} pins`);
+  const firstRow = (await results.getByRole('listitem').first().innerText()).replace(/\s+/g, ' ');
+  record('Each place says how far it is, in a straight line, and shows no rating', /(m|km) from the centre of Manali, in a straight line/.test(firstRow) && !/★|rating|stars/i.test(firstRow), firstRow.slice(0, 160));
+
+  await page.getByLabel('Add places to').selectOption('2');
+  const firstName = (await results.getByRole('listitem').first().getByRole('heading').innerText()).trim();
+  await results.getByRole('listitem').first().getByRole('button', { name: /^Add to Day 2/ }).click();
+  const addedLine = await results.getByRole('listitem').first().getByText('Added to').waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const tripNow = await call('GET', `/trips/${webTrip.id}`, { token: traveller.token });
+  const day2 = tripNow.data?.trip?.days?.[1]?.activities || [];
+  record(`"Add to Day 2" puts "${firstName}" on Day 2, with its map point`, addedLine && day2.length === 1 && day2[0].title === firstName.slice(0, 80) && Array.isArray(day2[0].place?.location), JSON.stringify(day2.map((a) => a.title)));
+  await page.getByRole('link', { name: 'Day 2' }).first().click();
+  await page.waitForURL(/\/plan\?day=2$/, { timeout: 10000 }).catch(() => {});
+  const onPlan = await page.getByRole('list', { name: 'Stops on Day 2' }).getByText(firstName).first().waitFor({ timeout: 10000 }).then(() => true, () => false);
+  const planText = onPlan ? '' : (await page.locator('main').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
+  record('...and the day plan shows it on Day 2', onPlan, `${page.url()} ${planText}`);
+
+  await page.goto(`${ctx.base}/trips/${webTrip.id}/explore`, { waitUntil: 'networkidle' });
+  await page.getByText('Things to see', { exact: true }).click();
+  const sights = await page.getByRole('list', { name: 'Things to see near Manali' }).waitFor({ timeout: 20000 }).then(() => true, () => false);
+  record('Switching to "Things to see" searches again', sights);
+  if (ctx.saveLook) await ctx.shot(page, 'explore');
+
+  await page.route('**/api/trips/*/places*', (route) => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'The nearby places search is not answering right now. Try again in a minute.' }) }));
+  await page.getByText('Restaurants', { exact: true }).click();
+  const boxError = await page.getByRole('alert').filter({ hasText: 'Nearby places could not be loaded' }).waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const rest = (await page.locator('h1').innerText()) === 'Manali Trip' && (await page.locator('.ts-pin-destination').count()) === 1 && (await page.getByRole('navigation', { name: 'Trip sections' }).getByRole('link').count()) >= 5;
+  record('The places search failing shows an error only in the results; the map and tabs still work', boxError && rest, `error ${boxError}, rest ${rest}`);
+  await page.unroute('**/api/trips/*/places*');
+  record('No script errors on Explore', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+  await context.close();
+
+  const watcher = await ctx.newUser('xwatch', 'Rahul Viewer');
+  await addMember(ctx, webTrip.id, watcher, 'viewer');
+  const phone = await ctx.openPage(...ctx.PHONE);
+  await ctx.login(phone.page, watcher);
+  await phone.page.goto(`${ctx.base}/trips/${webTrip.id}/explore`, { waitUntil: 'networkidle' });
+  await phone.page.getByRole('list', { name: 'Cafes near Manali' }).waitFor({ timeout: 20000 }).catch(() => {});
+  const addButtons = await phone.page.getByRole('button', { name: /^Add to Day/ }).count();
+  const onDay = await phone.page.getByText(/^On\s*Day 2$/).count();
+  record('A viewer sees the places (and which day one is on) but no "Add to Day" buttons', addButtons === 0 && onDay >= 1, `${addButtons} buttons, ${onDay} "On Day 2"`);
+  const extra = await ctx.overflowOf(phone.page);
+  record(`Phone width (${ctx.PHONE[0]}px), Explore: no sideways scrolling`, extra <= 0, `${extra}px`);
+  await phone.context.close();
+}
 
 // ====================== Step 6: expenses, budget, settle up ======================
 async function moneyChecks(ctx) {
   const { call, record, hasError, db } = ctx;
   ctx.setSection('Money API');
 
-  const ashish = await ctx.newUser('cashashish', 'Ashish Money');
-  const rahul = await ctx.newUser('cashrahul', 'Rahul Money');
-  const ankit = await ctx.newUser('cashankit', 'Ankit Money');
-  const rohan = await ctx.newUser('cashrohan', 'Rohan Money');
-  const viewer = await ctx.newUser('cashviewer', 'Kabir Money');
-  const stranger = await ctx.newUser('cashstranger', 'Stranger Money');
+  const ashish = await ctx.newUser('cashashish', 'Ashish Check');
+  const rahul = await ctx.newUser('cashrahul', 'Rahul Check');
+  const ankit = await ctx.newUser('cashankit', 'Ankit Check');
+  const rohan = await ctx.newUser('cashrohan', 'Rohan Check');
+  const viewer = await ctx.newUser('cashviewer', 'Kabir Check');
+  const stranger = await ctx.newUser('cashstranger', 'Dhruv Check');
   const trip = await makeTrip(ctx, ashish, { budget: 1_200_000 });
   for (const u of [rahul, ankit, rohan]) await addMember(ctx, trip.id, u, 'editor');
   await addMember(ctx, trip.id, viewer, 'viewer');
@@ -239,10 +335,10 @@ async function membersChecks(ctx) {
   const { call, record, hasError, db } = ctx;
   ctx.setSection('Members API');
 
-  const owner = await ctx.newUser('mowner', 'Ashish Members');
-  const dhruv = await ctx.newUser('mdhruv', 'Dhruv Members');
-  const rohan = await ctx.newUser('mrohan', 'Rohan Members');
-  const stranger = await ctx.newUser('mstranger', 'Ankit Members');
+  const owner = await ctx.newUser('mowner', 'Ashish Check');
+  const dhruv = await ctx.newUser('mdhruv', 'Dhruv Check');
+  const rohan = await ctx.newUser('mrohan', 'Rohan Check');
+  const stranger = await ctx.newUser('mstranger', 'Ankit Check');
   const trip = await makeTrip(ctx, owner);
   const t = `/trips/${trip.id}`;
   const tripObjectId = new ObjectId(trip.id);
@@ -260,7 +356,7 @@ async function membersChecks(ctx) {
   // Preview (the one public route)
   const preview = await call('GET', `/invites/${inv?.code}`);
   const p = preview.data?.invite;
-  record('Invite preview works without logging in: trip name, owner name, role', preview.status === 200 && p?.trip?.name === 'Manali Trip' && p.trip.ownerName === 'Ashish Members' && p.role === 'editor', `HTTP ${preview.status} ${preview.data?.error ?? ''}`);
+  record('Invite preview works without logging in: trip name, owner name, role', preview.status === 200 && p?.trip?.name === 'Manali Trip' && p.trip.ownerName === 'Ashish Check' && p.role === 'editor', `HTTP ${preview.status} ${preview.data?.error ?? ''}`);
   record('The preview shows no member names and no money', p && !('members' in p.trip) && !('budget' in p.trip) && typeof p.trip.memberCount === 'number', JSON.stringify(p?.trip));
   const lower = await call('GET', `/invites/${inv?.code.toLowerCase()}`);
   record('A code typed in small letters still works', lower.status === 200, `HTTP ${lower.status}`);
@@ -444,9 +540,9 @@ async function weatherChecks(ctx) {
   const KEY = '32.26,77.17'; // Manali rounded to 2 decimals, "lat,lng"
   const cache = db.collection('weatherCache');
 
-  const owner = await ctx.newUser('wxowner', 'Ashish Weather');
-  const friend = await ctx.newUser('wxfriend', 'Dhruv Weather');
-  const stranger = await ctx.newUser('wxstranger', 'Ankit Weather');
+  const owner = await ctx.newUser('wxowner', 'Ashish Check');
+  const friend = await ctx.newUser('wxfriend', 'Dhruv Check');
+  const stranger = await ctx.newUser('wxstranger', 'Ankit Check');
   const trip = await makeTrip(ctx, owner, { start: 3, days: 4 });
 
   await cache.deleteMany({ key: KEY });
@@ -478,10 +574,15 @@ async function weatherChecks(ctx) {
   const far = await makeTrip(ctx, owner, { name: 'Manali in winter', start: 40, days: 3 });
   const farW = await call('GET', `/trips/${far.id}/weather`, { token: owner.token });
   record('A trip 40 days away: every day "later", and Open-Meteo is not asked', farW.status === 200 && farW.data.weather.source === 'none' && farW.data.weather.days.every((d) => d.status === 'later' && !('max' in d)), `source ${farW.data?.weather?.source}, ${farW.data?.weather?.days?.map((d) => d.status).join(',')}`);
+  // A trip that runs past the forecast's last day. Which day that is depends on
+  // Open-Meteo (near midnight its 16 days can still start yesterday), so the
+  // expected answer is read from the forecast actually stored.
+  const lastForecast = (await cache.findOne({ key: KEY }))?.data?.daily?.time?.at(-1);
   const edge = await makeTrip(ctx, owner, { name: 'Manali at the edge', start: 13, days: 6 });
   const edgeW = await call('GET', `/trips/${edge.id}/weather`, { token: owner.token });
   const edgeStatus = edgeW.data?.weather?.days?.map((d) => d.status).join(',');
-  record('A trip at the edge of the 16 days: forecast for the first days, "later" after', edgeStatus === 'forecast,forecast,forecast,later,later,later', edgeStatus);
+  const expected = edge.days.map((d) => (d.date <= lastForecast ? 'forecast' : 'later')).join(',');
+  record(`A trip running past the forecast's last day (${lastForecast}): forecast up to it, "later" after`, edgeStatus === expected && expected.includes('forecast') && expected.includes('later'), `${edgeStatus} (expected ${expected})`);
 
   const strangerW = await call('GET', `/trips/${trip.id}/weather`, { token: stranger.token });
   record('A stranger asking for the weather: 403', strangerW.status === 403 && hasError(strangerW), `HTTP ${strangerW.status}`);
@@ -555,10 +656,10 @@ async function itineraryChecks(ctx) {
   const { call, record, hasError } = ctx;
   ctx.setSection('Day plan API');
 
-  const owner = await ctx.newUser('planowner', 'Ashish Plan');
-  const editor = await ctx.newUser('planeditor', 'Dhruv Plan');
-  const viewer = await ctx.newUser('planviewer', 'Rohan Plan');
-  const stranger = await ctx.newUser('planstranger', 'Ankit Plan');
+  const owner = await ctx.newUser('planowner', 'Ashish Check');
+  const editor = await ctx.newUser('planeditor', 'Dhruv Check');
+  const viewer = await ctx.newUser('planviewer', 'Rohan Check');
+  const stranger = await ctx.newUser('planstranger', 'Ankit Check');
   const trip = await makeTrip(ctx, owner);
   await addMember(ctx, trip.id, editor, 'editor');
   await addMember(ctx, trip.id, viewer, 'viewer');

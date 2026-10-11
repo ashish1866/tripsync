@@ -88,6 +88,13 @@ export function formatClock(timestamp) {
   return clock.format(new Date(timestamp)).replace(/\s?([ap])\.?m\.?$/i, (_, x) => ` ${x.toLowerCase()}m`);
 }
 
+// Metres as people say them: "350 m", "1.2 km", "12 km"
+export function formatDistance(metres) {
+  if (metres < 1000) return `${Math.max(10, Math.round(metres / 10) * 10)} m`;
+  const km = metres / 1000;
+  return `${km < 10 ? km.toFixed(1).replace(/\.0$/, '') : Math.round(km)} km`;
+}
+
 // "1 stop", "3 stops"
 export function plural(count, one, many = `${one}s`) {
   return `${count} ${count === 1 ? one : many}`;

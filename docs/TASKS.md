@@ -34,7 +34,7 @@ Invite link/code (Editor or Viewer, 7 days, expiry checked in code). Join works 
 Add/edit/delete (editors only their own). Equal or exact splits in paise with the leftover-paise rule. Budget by category in one aggregation, settlements excluded, chart themed with our tokens (milestone colour code), not Recharts defaults. Settle up: biggest debtor pays biggest creditor until zero. "Mark as paid" stored as a settlement.
 - Done when: unit tests pass for equal, uneven, rounding (Rs 1,000 / 3), already settled, and one-person-paid-everything; the brief's example gives Ankit -> Ashish 2,500, Rohan -> Ashish 2,500, Rahul -> Ashish 500; splits that do not add up get 400; an editor editing someone else's expense gets 403.
 
-## - [ ] Step 7: Explore nearby places
+## - [x] Step 7: Explore nearby places
 Cafes, attractions, hotels, restaurants via Geoapify, `places` cache first. List plus map pins, distance, "Add to Day N". No ratings.
 - Done when: cafes near Manali appear; a second search for the same area uses the cache; "Add to Day 2" puts the place on Day 2.
 
@@ -46,6 +46,11 @@ Shared list, add, tick, delete, "8 of 12 packed". Editors and owner only for cha
 Best order for a day (nearest-first, Haversine, labelled straight-line). Expense filters by category and person, 20 per page.
 - Done when: unit test for nearest-first passes; filters and paging return the right rows.
 
+## - [ ] Step 9.5: Full test run (all steps at once)
+First make `npm.cmd run check` use a fixed pool of test accounts: create each once if missing, keep email + random password in a git-ignored file (e.g. `checks/.test-accounts.json`), reuse them every run, and wipe their MongoDB data at the start and end of each run. Only the sign-up test makes one fresh account per run and deletes it. Then run the full check locally, fix every failure (one small commit per fix), and re-run until it passes. If `TOO_MANY_ATTEMPTS_TRY_LATER` appears, do not sleep in a loop: write it under "Blocked" in `docs/PROGRESS.md` and stop.
+- Done when: `npm.cmd test` and the full `npm.cmd run check` pass locally, covering every step's must-fail cases, with no leftover fresh test account.
+
 ## - [ ] Step 10: Demo prep and ship
+Before the push: delete the fixed test-account pool from Firebase and its data from MongoDB, and prove both are gone (the live check may recreate them; delete them again after it).
 Confirm `tripsync_app` can use a new database `tripsync`; ask Ashish before switching Render's `MONGODB_DB`. Seed script for the Manali demo trip with realistic bills. README run and demo instructions. Then push `main` once, deploy the Worker, run `npm.cmd run check -- --live`, report medians.
 - Done when: the live site shows the seeded Manali trip end to end and the live check passes.

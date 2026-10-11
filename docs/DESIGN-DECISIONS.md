@@ -135,6 +135,20 @@ Data choices:
 - Moving a stop to another day is one update computed inside MongoDB (take it out of every day, add it to the end of the new day), so other stops added meanwhile are kept.
 - At most 30 stops per day (409 with the reason). The stop search looks within 60 km of the destination, nearest first, through our API, so the Geoapify key never reaches the browser.
 
+## Explore (Step 7)
+
+- **Explore tab** (`/trips/:id/explore`): "Around Manali", then four plates (Cafes, Restaurants, Places to stay, Things to see), a distance (within 2, 5 or 10 km of the centre) and, for owners and editors, "Add places to: Day 2". Changing any of them searches again.
+- **Results:** a route board, one row per place, nearest first: a small stone with an **ink cap** and its number (the same number as its pin), the name, the address, and "1.2 km from the centre of Manali, in a straight line". A place already in the plan says "On Day 2" with a link to that day. One button per row, "Add to Day 2". No ratings, no stars, no photos, no opening hours: Geoapify gives none, and TripSync does not make them up. A source line says the places come from Geoapify using OpenStreetMap data.
+- **Map:** the 0 stone for the centre and an ink-capped stone per place. Ink caps mean "a place you could go"; yellow caps (the day plan) mean "a stop you planned". Picking a place (its name, or its pin) marks its row with a yellow band down the edge and pales the other pins; the list jumps to it without a smooth scroll (motion stays limited to the road dash).
+- **States:** loading is the road loader ("Looking for cafes near Manali"); empty is an unpainted stone and a sentence suggesting a wider distance; a failed search shows a warning board with "Try the search again" in the results only, while the map, tabs and the rest of the trip keep working.
+
+Data choices:
+- The `places` collection is the cache. A search is "category + area (rounded to about 1 km) + radius", and each place document lists the searches that found it (`searchKeys`), so different trips to Manali share one set of cafes. Lookup is a `$geoNear` query on the 2dsphere index (MongoDB computes each distance); only when it finds nothing from the last 7 days does the API ask Geoapify (`categories` + `filter=circle:lon,lat,radius`), save the places (one document per Geoapify `place_id`), and read them back the same way.
+- Places without a name are dropped (OpenStreetMap lists some streets and viewpoints as "attractions" with no name).
+- A search Geoapify answers with nothing is not cached, so it is asked again next time (rate-limited per account).
+- Distance is straight-line from the destination's centre, and the screen says so: mountain roads are longer.
+- "Add to Day N" uses the same add-a-stop route as the day plan, with the place's name, address, map point and Geoapify id, so the stop gets its pin and Explore can show "On Day 2".
+
 ## Money (Step 6)
 
 - **Money tab** (`/trips/:id/money`), a ledger in three parts, in the order people need them: Settle up, Budget, Bills.
@@ -190,6 +204,8 @@ Data choices:
 - A stranger gets 403 on a trip that exists and 404 on one that does not.
 
 ## Change log
+
+- 2026-10-12, Step 7: Explore tab (category plates, distance, add-to-day, results board with ink-capped stones, map pins that pick a place). StopNumber gained the ink-cap "place" version.
 
 - 2026-10-11, Step 6: Money tab (settle up, budget with kilometre-stone category colours, bills), `CategoryChart`, `ExpenseForm`; six `--km-*` colour tokens; ChoicePlates can now be multi-select with errors; ConfirmDialog has a calm yellow-band version and a custom cancel label.
 

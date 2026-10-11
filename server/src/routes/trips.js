@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireMember, requireRole } from '../middleware/tripAccess.js';
-import { validateBody, validateParams } from '../middleware/validate.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { rateLimit, LIMITS } from '../middleware/rateLimit.js';
 import { createTripBody, updateTripBody } from '../schemas/trip.js';
 import { activityParams, dayParams, editActivityBody, newActivityBody } from '../schemas/activity.js';
@@ -12,6 +12,8 @@ import { changeRole, ownerOrSelf, removeMember } from '../controllers/members.js
 import { addExpense, budget, deleteExpense, editExpense, listExpenses, markPaid, ownBillOrOwner, settlements } from '../controllers/expenses.js';
 import { expenseBody, expenseParams, settlementBody } from '../schemas/expense.js';
 import { weatherForTrip } from '../services/weather.js';
+import { nearbyPlaces } from '../services/places.js';
+import { placesQuery } from '../schemas/places.js';
 
 // Mounted at /api/trips, behind requireAuth (see app.js).
 // Every route with :id runs the guard chain in this order:
@@ -35,6 +37,12 @@ router.delete('/:id/activities/:actId', requireMember, planners, validateParams(
 // Weather for each day (any member). requireMember already loaded the destination and dates.
 router.get('/:id/weather', requireMember, rateLimit('weather', LIMITS.weather), async (req, res) => {
   res.json({ weather: await weatherForTrip(req.trip) });
+});
+
+// Nearby places for Explore (any member): ?category=cafe&radius=5000
+router.get('/:id/places', requireMember, rateLimit('places', LIMITS.places), validateQuery(placesQuery), async (req, res) => {
+  const { category, radius } = req.valid.query;
+  res.json(await nearbyPlaces(req.trip.destination, category, radius));
 });
 
 // Invites and members (the owner runs the group; anyone but the owner may leave)

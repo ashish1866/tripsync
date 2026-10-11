@@ -1,0 +1,180 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+}
+
+.heading {
+  font-size: var(--text-xl);
+  margin: 0 0 var(--space-3);
+}
+
+.subheading {
+  font-size: var(--text-lg);
+  margin: 0 0 var(--space-3);
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 18rem));
+  gap: var(--space-4);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.map {
+  position: sticky;
+  top: var(--space-4);
+}
+
+.results {
+  min-width: 0;
+}
+
+.problem {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.empty {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4);
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-sm);
+}
+
+.empty p {
+  margin: 0;
+}
+
+/* The results: a route board, one row per place */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.place {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  scroll-margin: var(--space-4);
+}
+
+.place + .place {
+  border-top: var(--line-thin);
+}
+
+/* The place picked on the list or the map: a cap-yellow band down its edge */
+.selected {
+  background: var(--ground);
+  border-left: 6px solid var(--cap);
+  padding-left: calc(var(--space-4) - 6px);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+/* The name picks the place on the map: looks like a heading, works like a button */
+.nameButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.nameButton:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.address,
+.distance,
+.onDay {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+}
+
+.address {
+  color: var(--ink-muted);
+}
+
+.onDay {
+  font-weight: 600;
+}
+
+.small {
+  flex: none;
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.source,
+.legend {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.viewer {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--stone);
+}
+
+@media (max-width: 56rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .map {
+    position: static;
+    order: -1;
+  }
+}
+
+@media (max-width: 34rem) {
+  .place {
+    flex-wrap: wrap;
+  }
+
+  .small {
+    margin-left: calc(2rem + var(--space-4));
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

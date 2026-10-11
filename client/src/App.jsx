@@ -12,6 +12,7 @@ import Settings from './pages/trip/Settings';
 import DayPlan from './pages/trip/DayPlan';
 import Members from './pages/trip/Members';
 import Money from './pages/trip/Money';
+import Explore from './pages/trip/Explore';
 import Join from './pages/Join';
 import ServiceStatus from './pages/ServiceStatus';
 import NotFound from './pages/NotFound';
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/trips/:id" element={signedIn(<TripLayout />)}>
             <Route index element={<Overview />} />
             <Route path="plan" element={<DayPlan />} />
+            <Route path="explore" element={<Explore />} />
             <Route path="money" element={<Money />} />
             <Route path="members" element={<Members />} />
             <Route path="settings" element={<Settings />} />

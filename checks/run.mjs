@@ -167,7 +167,23 @@ async function removeUserData(uid) {
 }
 
 // A throwaway account with a TripSync profile: { uid, token, email, password, name }.
+// One account per name for the whole run: "Ashish Check" is the same person in
+// every section (each section makes its own trips). Firebase limits how many
+// accounts one address can create per hour, so a run must not make dozens.
+const people = new Map();
 async function newUser(tag, name) {
+  if (people.has(name)) return people.get(name);
+  const person = makeUser(tag, name);
+  people.set(name, person);
+  try {
+    return await person;
+  } catch (err) {
+    people.delete(name);
+    throw err;
+  }
+}
+
+async function makeUser(tag, name) {
   const account = newAccount(tag);
   const signUp = await firebase('signUp', { email: account.email, password: account.password, returnSecureToken: true });
   const profile = await call('POST', '/users/me', { token: signUp.idToken, body: { name } });

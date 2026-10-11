@@ -41,3 +41,8 @@
   background: var(--stone);
   border-bottom-style: dashed;
 }
+
+/* A nearby place from Explore: ink cap, like its map pin */
+.place .cap {
+  background: var(--ink);
+}
