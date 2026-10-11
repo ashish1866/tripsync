@@ -4,7 +4,10 @@ A website where a group plans a trip together: each day's stops on a map, the fo
 
 College full-stack project by Ashish Bisht (24BCF10042) and Dhruv Grover (24BCF10010).
 
-Live: https://tripsync.ashishbisht.workers.dev
+**Live site:** https://tripsync.ashishbisht.workers.dev
+(the API behind it runs at https://tripsync-api-lec8.onrender.com; use the site's address, which forwards `/api` there)
+
+Service status before a demo: https://tripsync.ashishbisht.workers.dev/status
 
 ## How it fits together
 
@@ -26,7 +29,12 @@ Browser ──> Cloudflare Worker (tripsync.ashishbisht.workers.dev)
 - `render.yaml`: how Render builds and runs the API. Setup steps: `docs/RENDER-SETUP.md`
 - Firebase handles sign-up and log-in; TripSync never stores passwords.
 
-The Render address is a setting (`API_ORIGIN` in `server/wrangler.jsonc`), not written into the code.
+The Render address is a setting (`API_ORIGIN` in `server/wrangler.jsonc`), not written into the code. The Worker holds no secrets: the database link and the Geoapify key live only on Render (and in `server/.dev.vars` on this PC).
+
+Things on the live setup that are worth knowing:
+
+- **Speed:** a live API request takes about 0.3 to 0.4 s from Ashish's PC (measured 2026-10-11, median of 10). Most of that is the trip. On Cloudflare's free plan, visitors on this connection reach Cloudflare in Marseille, not India; the Worker then calls Render in Singapore. Calling Render directly takes about 0.19 s.
+- **Sleeping:** Render's free plan sleeps after 15 quiet minutes. The Worker's Cron Trigger pings `/api/health/ping` every 10 minutes to keep it awake (results are in the Worker's logs). If it does sleep, the first request takes about a minute and the site shows "not answering, try again in a minute".
 
 ## Run it on your PC
 

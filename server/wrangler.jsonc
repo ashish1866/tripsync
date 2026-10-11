@@ -28,8 +28,10 @@
   },
 
   "vars": {
-    // Where the API runs. Change this one line if the Render address changes.
+    // Where the API runs: the exact address from TripSync's own Render service page.
+    // The Worker forwards login tokens to this address, so never guess it:
+    // https://tripsync-api.onrender.com (no suffix) belongs to someone else's service.
     // For a local test of the Worker, `npm run preview:worker` overrides it with the local API.
-    "API_ORIGIN": "https://tripsync-api.onrender.com"
+    "API_ORIGIN": "https://tripsync-api-lec8.onrender.com"
   }
 }

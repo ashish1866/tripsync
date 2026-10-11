@@ -28,7 +28,7 @@ About 15 minutes. Everything stays on free plans: if any screen asks for a card 
    - `MongoDB connected`
 
    The status at the top changes to **Live**.
-9. At the top of the service page there is an address like `https://tripsync-api.onrender.com` (Render may add a few letters after the name). Copy it.
+9. At the top of the service page, under the name **tripsync-api**, there is an address ending in `.onrender.com`. Copy it from there exactly. Someone else already owns `tripsync-api.onrender.com`, so Render adds a few letters to ours (something like `tripsync-api-ab12.onrender.com`). Never type the address from memory: the Worker sends login tokens to it.
 10. Paste that address into a browser tab and add `/api/health` to the end. You should see `"mongo":"connected"`.
 11. Send Kiro the address. Kiro puts it into `server/wrangler.jsonc` (the `API_ORIGIN` setting), deploys the Cloudflare Worker, and runs the live check.
 
@@ -57,12 +57,13 @@ This lets people log in from the live site. It is the Cloudflare address, not th
 
 Email/Password sign-in is already confirmed working (the check creates and deletes real test accounts), so nothing else in Firebase needs changing.
 
-## What happens after (Kiro)
+## Done on 2026-10-11
 
-1. Set `API_ORIGIN` in `server/wrangler.jsonc` to the Render address and deploy the Worker (`npm run deploy`).
-2. Remove the old database link and Geoapify key from the Cloudflare Worker's secrets. The Worker no longer needs them, so the database password then lives only on Render and on this PC.
-3. Run `npm run check -- --live` and report the results, with time per request.
-4. Confirm in the Worker's logs that the 10-minute keep-awake ping reaches Render.
+- Render service: https://tripsync-api-lec8.onrender.com (free, Singapore)
+- `API_ORIGIN` in `server/wrangler.jsonc` set to that address, and the Worker deployed with the 10-minute Cron Trigger
+- `MONGODB_URI` and `GEOAPIFY_KEY` deleted from the Cloudflare Worker's secrets. The Worker has no secrets now, so the database password lives only on Render and on this PC.
+- Firebase authorized domain `tripsync.ashishbisht.workers.dev` added
+- `npm run check -- --live` passed
 
 ## Good to know
 
