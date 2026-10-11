@@ -11,7 +11,8 @@ import styles from './PlaceSearch.module.css';
 // when the text is changed again after picking.
 //
 // endpoint: API path; params: extra query values (for example { tripId });
-// describe(place): the second line under each suggestion.
+// describe(place): the second line under each suggestion;
+// onText(text): every change to the typed text (to notice text that was never picked).
 export default function PlaceSearch({
   label,
   hint,
@@ -25,6 +26,7 @@ export default function PlaceSearch({
   placeholder,
   emptyHelp = 'Check the spelling, or try the nearest bigger town.',
   disabled = false,
+  onText,
 }) {
   const id = useId();
   const [text, setText] = useState(picked ? picked.name : '');
@@ -113,6 +115,7 @@ export default function PlaceSearch({
           disabled={disabled}
           onChange={(e) => {
             setText(e.target.value);
+            onText?.(e.target.value);
             setOpen(true);
             if (picked) onPick(null);
           }}

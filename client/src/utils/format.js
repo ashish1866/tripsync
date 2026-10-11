@@ -74,6 +74,14 @@ export function placeLine(destination) {
   return parts.filter(Boolean).join(', ');
 }
 
+// "09:30" -> "9:30 am", "14:05" -> "2:05 pm" (a stop's time, as people say it)
+export function formatTime(hhmm) {
+  if (!hhmm) return '';
+  const [h, m] = hhmm.split(':').map(Number);
+  const suffix = h < 12 ? 'am' : 'pm';
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
 // "1 stop", "3 stops"
 export function plural(count, one, many = `${one}s`) {
   return `${count} ${count === 1 ? one : many}`;

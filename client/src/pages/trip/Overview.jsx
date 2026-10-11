@@ -1,7 +1,8 @@
-import { useOutletContext } from 'react-router';
+import { Link, useOutletContext } from 'react-router';
 import DayRoad from '../../components/DayRoad';
 import TripMap from '../../components/TripMap';
 import { formatRupees, placeLine, plural } from '../../utils/format';
+import { tripPins } from '../../utils/pins';
 import styles from './Overview.module.css';
 
 const ROLE_LABEL = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
@@ -10,6 +11,7 @@ const ROLE_LABEL = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
 export default function Overview() {
   const { trip } = useOutletContext();
   const stops = trip.days.reduce((n, d) => n + d.activities.length, 0);
+  const pins = tripPins(trip);
 
   return (
     <div className={styles.grid}>
@@ -18,18 +20,21 @@ export default function Overview() {
           The route, {plural(trip.days.length, 'day')}
         </h2>
         <DayRoad days={trip.days} />
+        <p className={styles.note}>
+          <Link to="plan">Open the day plan</Link> to add or change stops.
+        </p>
       </section>
 
       <section className={styles.map} aria-labelledby="map-title">
         <h2 id="map-title" className={styles.heading}>
           {placeLine(trip.destination)}
         </h2>
-        <TripMap
-          height="20rem"
-          label={`Map of ${trip.destination.name}`}
-          pins={[{ id: 'destination', kind: 'destination', location: trip.destination.location, label: '0', title: placeLine(trip.destination) }]}
-        />
-        <p className={styles.note}>{stops ? `${plural(stops, 'stop')} planned so far.` : 'No stops planned yet.'}</p>
+        <TripMap height="20rem" label={`Map of ${trip.destination.name}`} pins={pins} />
+        <p className={styles.note}>
+          {stops
+            ? `${plural(stops, 'stop')} planned so far. The number on each stone is its day; the 0 stone is ${trip.destination.name}.`
+            : 'No stops planned yet.'}
+        </p>
       </section>
 
       <aside className={styles.side}>

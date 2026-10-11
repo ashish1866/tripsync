@@ -119,6 +119,22 @@ Only two things move, and both mean "still working":
 - **Trip page:** a stone-coloured route board across the top (back link, trip name in large condensed lettering, place and dates, then tabs). The tab you are on gets a yellow cap strip and joins the page below. The Overview opens on "The route": one day stone per date standing on a kerb line, scrolling sideways on a phone. Below: the map, and a side column with the budget and the group.
 - **Trip settings (owner only):** the same trip form, with the destination shown as fixed text. Deleting lives in a separate board with the red band of a warning sign, and asks first in a TripSync dialog (HTML `<dialog>`, focus starts on "Keep it", Escape closes). No browser `confirm()`.
 
+## Day plan (Step 3)
+
+- **Where:** a "Day plan" tab (`/trips/:id/plan?day=2`). The day is in the address, so a link can open Day 2 directly. The row of day stones on top is now a row of buttons; the chosen day gets an ink cap and a yellow face, like a stone freshly painted.
+- **Stops:** each stop's number is a small kilometre stone, the same shape as its map pin, so the list and the map read as one. A stop with no place has an unpainted (dashed) stone and the words "No map point". The time sits in a small ink plate before the name ("10:00 am Solang Valley"). "Added by" names the member, because the group asks who put a stop there.
+- **Map on the day plan:** that day's stops carry their number in the day. Stops on other days are pale, unpainted stones with no number, so the day you are on stands out but the rest of the trip is still in view. On the overview, every stop's stone carries its day number instead.
+- **Laptop vs phone:** the stops sit beside the map on a laptop (the map stays in view while you scroll the list). On a phone the map comes first, then the stops, then the add form.
+- **Adding:** the add form is a board with a yellow cap band (the warning band of the delete board, in identity yellow), always open under the day's stops for owners and editors. Picking a place fills in the stop name unless someone typed their own. Viewers see one plain line saying only the owner and editors change the plan, not a disabled form.
+- **Removing** asks first in the same TripSync dialog as deleting a trip.
+- **Drop-downs** (the Day field when editing a stop) use a shared `SelectField` in the same frame as text fields, with a painted ink triangle instead of the browser's arrow.
+
+Data choices:
+- A new stop goes into its day in time order (before the first stop with a later time; untimed stops at the end). After that, the stored order is the plan: editing a time does not reshuffle the list, and Step 9's "best order" will reorder it on purpose.
+- Edits send only the fields that changed and set only those fields on that one stop (`$set` with an array filter). Two people changing different fields, or different stops, at the same moment both keep their change. Two people changing the same field: the later save wins.
+- Moving a stop to another day is one update computed inside MongoDB (take it out of every day, add it to the end of the new day), so other stops added meanwhile are kept.
+- At most 30 stops per day (409 with the reason). The stop search looks within 60 km of the destination, nearest first, through our API, so the Geoapify key never reaches the browser.
+
 ## Data choices made in Step 2
 
 - Trip dates are stored as `YYYY-MM-DD` text, not timestamps. A trip date is a day on the calendar; text cannot shift to the day before on a server in another time zone.
@@ -129,6 +145,8 @@ Only two things move, and both mean "still working":
 - A stranger gets 403 on a trip that exists and 404 on one that does not.
 
 ## Change log
+
+- 2026-10-11, Step 3: Day plan tab with selectable day stones, stop list with stone numbers, add/edit/remove forms, stop pins (numbered on the chosen day, pale on others, day numbers on the overview). New shared `SelectField`, `StopNumber`, `StopForm`; TextField gained a multi-line mode for notes.
 
 - 2026-10-11, Step 2: trips list, plan a new trip, trip page with the route of day stones and the map, trip settings with delete. Added the Maps section (grey OSM tiles, stone pins), the motion list with the reason for the turning mark on `/status`, and the Step 2 data choices.
 

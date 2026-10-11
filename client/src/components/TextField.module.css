@@ -49,6 +49,36 @@
   outline: none;
 }
 
+.multiline {
+  resize: vertical;
+  min-height: 5rem;
+  line-height: 1.4;
+}
+
+/* A drop-down (SelectField): no browser arrow; a painted ink triangle instead */
+.select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: var(--space-7);
+}
+
+.selectArrow {
+  position: relative;
+}
+
+.selectArrow::after {
+  content: '';
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  width: 0.75rem;
+  height: 0.5rem;
+  margin-top: -0.25rem;
+  background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  pointer-events: none;
+}
+
 .input:disabled {
   cursor: not-allowed;
   color: var(--ink-muted);

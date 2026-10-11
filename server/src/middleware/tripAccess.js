@@ -9,8 +9,16 @@ import { HttpError } from '../utils/httpError.js';
 // The database query itself asks for "this trip AND this user in its members",
 // so a stranger can never get the trip back, even by accident.
 // On success: req.trip = { _id, owner, members } and req.role = 'owner' | 'editor' | 'viewer'.
-export async function requireMember(req, res, next) {
-  const tripId = toObjectId(req.params.id);
+export const requireMember = memberOf((req) => req.params.id);
+
+// The same check for routes that name the trip somewhere else, for example
+// /geo/spots?tripId=... (the stop search is biased towards that trip's destination).
+export function memberOf(readTripId) {
+  return (req, res, next) => checkMember(readTripId(req), req, next);
+}
+
+async function checkMember(rawId, req, next) {
+  const tripId = toObjectId(rawId);
   if (!tripId) throw new HttpError(404, 'This trip does not exist. The link may be mistyped.');
 
   const trips = (await getDb()).collection('trips');

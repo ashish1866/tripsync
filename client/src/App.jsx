@@ -9,6 +9,7 @@ import NewTrip from './pages/NewTrip';
 import TripLayout from './pages/trip/TripLayout';
 import Overview from './pages/trip/Overview';
 import Settings from './pages/trip/Settings';
+import DayPlan from './pages/trip/DayPlan';
 import ServiceStatus from './pages/ServiceStatus';
 import NotFound from './pages/NotFound';
 
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/trips/new" element={signedIn(<NewTrip />)} />
           <Route path="/trips/:id" element={signedIn(<TripLayout />)}>
             <Route index element={<Overview />} />
+            <Route path="plan" element={<DayPlan />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />

@@ -31,7 +31,177 @@ export async function addMember(ctx, tripId, user, role) {
   await ctx.db.collection('trips').updateOne({ _id: new ObjectId(tripId) }, { $push: { members: { uid: user.uid, role, joinedAt: new Date() } } });
 }
 
-const sections = [tripsChecks];
+const sections = [tripsChecks, itineraryChecks];
+
+// ====================== Step 3: itinerary and map ======================
+async function itineraryChecks(ctx) {
+  const { call, record, hasError } = ctx;
+  ctx.setSection('Day plan API');
+
+  const owner = await ctx.newUser('planowner', 'Ashish Plan');
+  const editor = await ctx.newUser('planeditor', 'Dhruv Plan');
+  const viewer = await ctx.newUser('planviewer', 'Rohan Plan');
+  const stranger = await ctx.newUser('planstranger', 'Ankit Plan');
+  const trip = await makeTrip(ctx, owner);
+  await addMember(ctx, trip.id, editor, 'editor');
+  await addMember(ctx, trip.id, viewer, 'viewer');
+  const base = `/trips/${trip.id}`;
+  const dayOf = (t, n) => t.days.find((d) => d.dayNumber === n);
+
+  // Stop search (Geoapify, through our API only)
+  const spots = await call('GET', `/geo/spots?q=${encodeURIComponent('Solang Valley')}&tripId=${trip.id}`, { token: editor.token });
+  const solang = spots.data?.results?.find((r) => r.name === 'Solang Valley');
+  record('Stop search "Solang Valley" near the trip finds it', spots.status === 200 && solang, `HTTP ${spots.status} ${spots.data?.error ?? spots.data?.results?.map((r) => r.name).join(', ')}`);
+  record('Its map point is [longitude, latitude] near Solang', solang && Math.abs(solang.location[0] - 77.156) < 0.05 && Math.abs(solang.location[1] - 32.317) < 0.05, JSON.stringify(solang?.location));
+  const spotsStranger = await call('GET', `/geo/spots?q=Solang&tripId=${trip.id}`, { token: stranger.token });
+  record('Stop search for a trip you are not in: 403', spotsStranger.status === 403, `HTTP ${spotsStranger.status}`);
+  const spotsNoTrip = await call('GET', '/geo/spots?q=Solang', { token: owner.token });
+  record('Stop search without a trip: 404', spotsNoTrip.status === 404 && hasError(spotsNoTrip), `HTTP ${spotsNoTrip.status}`);
+  const spotsShort = await call('GET', `/geo/spots?q=S&tripId=${trip.id}`, { token: owner.token });
+  record('Stop search with 1 letter: 400', spotsShort.status === 400, `HTTP ${spotsShort.status}`);
+  const html = JSON.stringify(spots.data ?? {});
+  record('The search answer carries no Geoapify key', !/apiKey|api_key/i.test(html), 'key-like text in the answer');
+
+  // Add
+  const place = solang || { name: 'Solang Valley', address: 'Solang, Manali, India', location: [77.156, 32.3174], placeId: '' };
+  const added = await call('POST', `${base}/days/2/activities`, { token: editor.token, body: { title: 'Solang Valley', time: '10:00', notes: 'Paragliding if the wind is calm', place } });
+  const day2 = added.data?.trip && dayOf(added.data.trip, 2);
+  record('Editor adds "Solang Valley" to Day 2: 201', added.status === 201 && day2?.activities[0]?.title === 'Solang Valley', `HTTP ${added.status} ${added.data?.error ?? ''}`);
+  const solangId = added.data?.activity?.id;
+  record('The stop keeps its place, time, notes and who added it', day2?.activities[0]?.place?.location?.[0] === place.location[0] && day2.activities[0].time === '10:00' && day2.activities[0].addedBy === editor.uid, JSON.stringify(day2?.activities[0] ?? null).slice(0, 200));
+
+  const viewerAdd = await call('POST', `${base}/days/2/activities`, { token: viewer.token, body: { title: 'Viewer stop' } });
+  record('A viewer adding a stop: 403', viewerAdd.status === 403 && hasError(viewerAdd), `HTTP ${viewerAdd.status}`);
+  const strangerAdd = await call('POST', `${base}/days/2/activities`, { token: stranger.token, body: { title: 'Stranger stop' } });
+  record('A stranger adding a stop: 403', strangerAdd.status === 403, `HTTP ${strangerAdd.status}`);
+  const noTokenAdd = await call('POST', `${base}/days/2/activities`, { body: { title: 'No token' } });
+  record('Adding a stop without logging in: 401', noTokenAdd.status === 401, `HTTP ${noTokenAdd.status}`);
+
+  const badStops = [
+    ['an empty name', { title: '  ' }],
+    ['a time of 25:00', { title: 'Late', time: '25:00' }],
+    ['notes over 500 characters', { title: 'Long', notes: 'x'.repeat(501) }],
+    ['a place off the globe', { title: 'Nowhere', place: { ...place, location: [200, 95] } }],
+    ['an extra field (addedBy)', { title: 'Sneaky', addedBy: stranger.uid }],
+    ['a title that is not text', { title: { $gt: '' } }],
+  ];
+  for (const [label, body] of badStops) {
+    const r = await call('POST', `${base}/days/2/activities`, { token: owner.token, body });
+    record(`Adding a stop with ${label}: 400`, r.status === 400 && hasError(r), `HTTP ${r.status} ${r.data?.error ?? ''}`);
+  }
+  const noDay = await call('POST', `${base}/days/9/activities`, { token: owner.token, body: { title: 'Day 9' } });
+  record('Adding to a day the trip does not have (Day 9): 404', noDay.status === 404 && hasError(noDay), `HTTP ${noDay.status}`);
+  const badDay = await call('POST', `${base}/days/two/activities`, { token: owner.token, body: { title: 'Day two' } });
+  record('Adding to day "two": 400', badDay.status === 400, `HTTP ${badDay.status}`);
+
+  // Time order inside a day
+  for (const [title, time] of [['Hadimba Devi Temple', '09:00'], ['Lunch on Mall Road', '13:00'], ['Breakfast at the hotel', '08:00'], ['Evening walk', '']]) {
+    await call('POST', `${base}/days/1/activities`, { token: owner.token, body: { title, time } });
+  }
+  const afterOrder = await call('GET', base, { token: owner.token });
+  const order1 = dayOf(afterOrder.data.trip, 1).activities.map((a) => a.title);
+  record('A day keeps its stops in time order, untimed ones last', JSON.stringify(order1) === JSON.stringify(['Breakfast at the hotel', 'Hadimba Devi Temple', 'Lunch on Mall Road', 'Evening walk']), JSON.stringify(order1));
+  const [breakfast, hadimba] = dayOf(afterOrder.data.trip, 1).activities;
+
+  // Safe edits: two members at the same moment
+  const [a, b] = await Promise.all([
+    call('PATCH', `${base}/activities/${hadimba.id}`, { token: owner.token, body: { notes: 'Shoes off at the gate' } }),
+    call('PATCH', `${base}/activities/${hadimba.id}`, { token: editor.token, body: { title: 'Hadimba Temple' } }),
+  ]);
+  const [c, d] = await Promise.all([
+    call('PATCH', `${base}/activities/${breakfast.id}`, { token: owner.token, body: { time: '07:30' } }),
+    call('PATCH', `${base}/activities/${solangId}`, { token: editor.token, body: { notes: 'Carry jackets' } }),
+  ]);
+  const both = await call('GET', base, { token: owner.token });
+  const h = both.data.trip.days.flatMap((x) => x.activities).find((x) => x.id === hadimba.id);
+  const bf = both.data.trip.days.flatMap((x) => x.activities).find((x) => x.id === breakfast.id);
+  const so = both.data.trip.days.flatMap((x) => x.activities).find((x) => x.id === solangId);
+  record('Two members edit different fields of one stop at once: both edits kept', a.status === 200 && b.status === 200 && h?.title === 'Hadimba Temple' && h.notes === 'Shoes off at the gate' && h.time === '09:00', JSON.stringify(h).slice(0, 200));
+  record('Two members edit two different stops at once: both edits kept', c.status === 200 && d.status === 200 && bf?.time === '07:30' && so?.notes === 'Carry jackets' && so.title === 'Solang Valley' && so.place?.name === place.name, `${bf?.time} / ${so?.notes}`);
+  record('An edit records who changed the stop', h?.updatedBy === owner.uid || h?.updatedBy === editor.uid, h?.updatedBy);
+
+  const viewerEdit = await call('PATCH', `${base}/activities/${solangId}`, { token: viewer.token, body: { title: 'Changed by viewer' } });
+  record('A viewer editing a stop: 403', viewerEdit.status === 403, `HTTP ${viewerEdit.status}`);
+  const viewerDelete = await call('DELETE', `${base}/activities/${solangId}`, { token: viewer.token });
+  record('A viewer removing a stop: 403', viewerDelete.status === 403, `HTTP ${viewerDelete.status}`);
+  const emptyEdit = await call('PATCH', `${base}/activities/${solangId}`, { token: owner.token, body: {} });
+  record('An edit with nothing to change: 400', emptyEdit.status === 400 && hasError(emptyEdit), `HTTP ${emptyEdit.status}`);
+  const missingEdit = await call('PATCH', `${base}/activities/0000000000000000`, { token: owner.token, body: { title: 'Ghost' } });
+  record('Editing a stop that does not exist: 404', missingEdit.status === 404 && hasError(missingEdit), `HTTP ${missingEdit.status}`);
+
+  // Move to another day, all its fields kept
+  const moved = await call('PATCH', `${base}/activities/${hadimba.id}`, { token: editor.token, body: { dayNumber: 3 } });
+  const m3 = moved.data?.trip && dayOf(moved.data.trip, 3).activities;
+  const m1 = moved.data?.trip && dayOf(moved.data.trip, 1).activities;
+  record('Moving a stop to Day 3: gone from Day 1, on Day 3 with its notes', moved.status === 200 && m3?.some((x) => x.id === hadimba.id && x.notes === 'Shoes off at the gate') && !m1?.some((x) => x.id === hadimba.id) && m1?.length === 3, `HTTP ${moved.status} ${moved.data?.error ?? ''}`);
+  const moveFar = await call('PATCH', `${base}/activities/${hadimba.id}`, { token: editor.token, body: { dayNumber: 9 } });
+  record('Moving a stop to a day the trip does not have: 400', moveFar.status === 400 && hasError(moveFar), `HTTP ${moveFar.status} ${moveFar.data?.error ?? ''}`);
+
+  // Remove
+  const removed = await call('DELETE', `${base}/activities/${hadimba.id}`, { token: editor.token });
+  const removedAgain = await call('DELETE', `${base}/activities/${hadimba.id}`, { token: editor.token });
+  const stillThere = removed.data?.trip?.days.some((x) => x.activities.some((y) => y.id === hadimba.id));
+  record('Removing a stop: 200, and removing it again: 404', removed.status === 200 && !stillThere && removedAgain.status === 404, `HTTP ${removed.status} then ${removedAgain.status}`);
+
+  // ---------- in the browser ----------
+  ctx.setSection('Day plan in the browser');
+  const planner = await ctx.newUser('planweb', 'Ashish Bisht');
+  const webTrip = await makeTrip(ctx, planner);
+  const { context, page, consoleErrors } = await ctx.openPage();
+  await ctx.login(page, planner);
+  await page.goto(`${ctx.base}/trips/${webTrip.id}/plan?day=2`, { waitUntil: 'networkidle' });
+  const emptyDay = await page.getByText('Nothing is planned for Day 2').isVisible().catch(() => false);
+  record('An empty day says so and offers the add form', emptyDay && (await page.getByRole('form', { name: 'Add a stop to Day 2' }).count()) === 1);
+
+  await page.getByRole('button', { name: 'Add to Day 2' }).click();
+  const nameError = await page.locator('[aria-invalid="true"]').count();
+  record('Adding with no name: an error under "Stop name"', nameError === 1, `${nameError} fields marked`);
+
+  await page.getByRole('combobox', { name: 'Place' }).fill('Solang Valley');
+  const option = page.getByRole('option', { name: /^Solang Valley/ });
+  const offered = await option.first().waitFor({ timeout: 15000 }).then(() => true, () => false);
+  record('Typing "Solang Valley" offers it from the stop search', offered);
+  if (offered) await option.first().click();
+  const autoName = await page.getByLabel('Stop name').inputValue();
+  record('Picking the place fills in the stop name', autoName.startsWith('Solang Valley'), `"${autoName}"`);
+  await page.getByLabel('Stop name').fill('Solang Valley');
+  await page.getByLabel('Time').fill('10:00');
+  await page.getByRole('button', { name: 'Add to Day 2' }).click();
+  const listed = await page.getByRole('list', { name: 'Stops on Day 2' }).getByText('Solang Valley').first().waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const stoneText = (await page.getByRole('list', { name: 'Days of the trip' }).getByRole('listitem').nth(1).innerText()).replace(/\s+/g, ' ');
+  record('Day 2 shows Solang Valley, and its stone says "1 stop"', listed && /1 stop/.test(stoneText), stoneText);
+  const livePins = await page.locator('.ts-pin-stop:not(.ts-pin-faded)').count();
+  record('Solang Valley has a numbered stone pin on the map', livePins === 1, `${livePins} pins`);
+
+  await page.getByRole('button', { name: 'Day 1', exact: false }).first().click();
+  const fadedPins = await page.locator('.ts-pin-stop.ts-pin-faded').count();
+  record('On Day 1, the Day 2 stop is a pale pin', fadedPins === 1, `${fadedPins} faded pins`);
+  if (ctx.saveLook) await ctx.shot(page, 'day-plan');
+
+  await page.getByRole('link', { name: 'Overview' }).click();
+  await page.waitForURL(new RegExp(`/trips/${webTrip.id}$`));
+  const overviewPins = await page.locator('.ts-pin-stop').count();
+  const overviewDest = await page.locator('.ts-pin-destination').count();
+  record('The overview map has the destination pin and a pin for every stop', overviewPins === 1 && overviewDest === 1, `${overviewDest} destination, ${overviewPins} stops`);
+  record('No script errors on the day plan', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+  await context.close();
+
+  // A viewer sees the plan but no way to change it
+  const watcher = await ctx.newUser('planwatch', 'Rahul Viewer');
+  await addMember(ctx, webTrip.id, watcher, 'viewer');
+  const phone = await ctx.openPage(...ctx.PHONE);
+  await ctx.login(phone.page, watcher);
+  await phone.page.goto(`${ctx.base}/trips/${webTrip.id}/plan?day=2`, { waitUntil: 'networkidle' });
+  await phone.page.getByRole('list', { name: 'Stops on Day 2' }).waitFor({ timeout: 15000 }).catch(() => {});
+  const viewerForms = await phone.page.getByRole('form').count();
+  const viewerButtons = await phone.page.getByRole('button', { name: /^(Edit|Remove) / }).count();
+  const viewerLine = await phone.page.getByText('You can view this trip').isVisible().catch(() => false);
+  record('A viewer sees the stops with no add form and no Edit or Remove', viewerForms === 0 && viewerButtons === 0 && viewerLine, `${viewerForms} forms, ${viewerButtons} buttons`);
+  const extra = await ctx.overflowOf(phone.page);
+  record(`Phone width (${ctx.PHONE[0]}px), the day plan: no sideways scrolling`, extra <= 0, `${extra}px`);
+  if (ctx.saveLook) await ctx.shot(phone.page, 'day-plan-phone');
+  await phone.context.close();
+}
 
 export async function runFeatureChecks(ctx) {
   for (const section of sections) {

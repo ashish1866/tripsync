@@ -4,11 +4,19 @@ import styles from './TextField.module.css';
 // A labelled input with an optional hint and a field-level error.
 // The error is linked to the input (aria-describedby) so screen readers announce it.
 // type="password" gets a "Show" / "Hide" button, which helps when typing on a phone.
-export default function TextField({ label, hint, error, type = 'text', className = '', ...inputProps }) {
+// multiline gives a text area (for notes) with the same frame and states.
+export default function TextField({ label, hint, error, type = 'text', multiline = false, className = '', ...inputProps }) {
   const id = useId();
   const [reveal, setReveal] = useState(false);
   const isPassword = type === 'password';
   const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
+  const shared = {
+    id,
+    className: `${styles.input} ${multiline ? styles.multiline : ''}`,
+    'aria-invalid': error ? 'true' : undefined,
+    'aria-describedby': describedBy,
+    ...inputProps,
+  };
 
   return (
     <div className={`${styles.field} ${error ? styles.invalid : ''} ${className}`}>
@@ -21,14 +29,7 @@ export default function TextField({ label, hint, error, type = 'text', className
         </p>
       )}
       <div className={styles.control}>
-        <input
-          id={id}
-          className={styles.input}
-          type={isPassword && reveal ? 'text' : type}
-          aria-invalid={error ? 'true' : undefined}
-          aria-describedby={describedBy}
-          {...inputProps}
-        />
+        {multiline ? <textarea rows={3} {...shared} /> : <input type={isPassword && reveal ? 'text' : type} {...shared} />}
         {isPassword && (
           <button
             type="button"

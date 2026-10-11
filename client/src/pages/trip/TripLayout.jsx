@@ -13,6 +13,7 @@ import styles from './TripLayout.module.css';
 // (the server refuses those actions anyway; hiding is only for clarity).
 const TABS = [
   { to: '', label: 'Overview', end: true },
+  { to: 'plan', label: 'Day plan' },
   { to: 'settings', label: 'Trip settings', who: ['owner'] },
 ];
 

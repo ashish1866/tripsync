@@ -18,7 +18,7 @@ Create, list, edit, delete. Destination search through `/api/geo/destinations` (
 - Done when: "Manali Trip" shows on My Trips with its location; a stranger reading a trip gets 403; a non-owner editing gets 403; bad dates or budget get 400.
 - Also in this step: log in DESIGN-DECISIONS.md the reason for the turning "still checking" mark on `/status` (the motion shows a check is still running) and confirm it stands still under reduced motion.
 
-## - [ ] Step 3: Itinerary and map
+## - [x] Step 3: Itinerary and map
 Activities per day (title, time, notes, place via Geoapify autocomplete `/api/geo/spots`). Pins for the destination and every activity. Single-item updates only.
 - Done when: Day 2 shows Solang Valley with a pin; editing one activity never overwrites another member's edit; a viewer adding an activity gets 403.
 

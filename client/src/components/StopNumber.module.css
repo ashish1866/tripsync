@@ -1,0 +1,43 @@
+/* Matches the stop pins drawn in TripMap.module.css (.ts-pin) */
+.stone {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  width: 2rem;
+  height: 2.6rem;
+  background: var(--stone);
+  border: var(--line);
+  border-bottom-width: 4px;
+  border-radius: var(--radius-dome);
+  overflow: hidden;
+  color: var(--ink);
+}
+
+.cap {
+  flex: 0 0 42%;
+  background: var(--cap);
+  border-bottom: var(--line);
+}
+
+.face {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* No map point: an unpainted stone outline */
+.unpinned {
+  border-style: dashed;
+  border-bottom-style: solid;
+}
+
+.unpinned .cap {
+  background: var(--stone);
+  border-bottom-style: dashed;
+}
