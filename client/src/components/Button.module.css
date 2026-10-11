@@ -18,9 +18,8 @@
   text-decoration: none;
   white-space: nowrap; /* labels are short; a two-line button reads as broken */
   cursor: pointer;
-  transition:
-    background-color var(--fast) var(--ease),
-    transform var(--fast) var(--ease);
+  /* Coming back up after a press: a little slower than going down */
+  transition: transform var(--t-release) var(--ease-settle);
 }
 
 /* Hover: the painted outline gets heavier, 2px to 4px. The extra 2px is an
@@ -30,9 +29,11 @@
   outline-offset: -4px;
 }
 
-/* Pressed: darker paint, pressed in by one pixel */
+/* Pressed: darker paint, pressed in by one pixel, at once (the plate goes
+   down under the finger with no delay; the paint changes instantly) */
 .button:active {
   transform: translateY(1px);
+  transition-duration: var(--t-press);
 }
 
 /* Focus uses the shared double ring from global.css */
@@ -76,4 +77,11 @@
 }
 .danger:active {
   background-color: var(--signal-pressed);
+}
+
+/* Calm version: the press still shows (1px down, darker paint), with no transition */
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
 }

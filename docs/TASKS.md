@@ -54,3 +54,16 @@ First make `npm.cmd run check` use a fixed pool of test accounts: create each on
 Before the push: delete the fixed test-account pool from Firebase and its data from MongoDB, and prove both are gone (the live check may recreate them; delete them again after it).
 Confirm `tripsync_app` can use a new database `tripsync`; ask Ashish before switching Render's `MONGODB_DB`. Seed script for the Manali demo trip with realistic bills. README run and demo instructions. Then push `main` once, deploy the Worker, run `npm.cmd run check -- --live`, report medians.
 - Done when: the live site shows the seeded Manali trip end to end and the live check passes.
+
+## - [ ] Step 11: Motion revamp
+Asked for by Ashish on 12-Oct-2026 while Step 10 waits on the demo-trip email (see Blocked in `docs/PROGRESS.md`). Motion only: no colour, font, layout or copy changes. Every animation tells the user something about the road world (still travelling, freshly painted, wet paint, stones moving along the road, a plate pressed) and has a written reason in DESIGN-DECISIONS.md.
+- Done when:
+  - The inventory of what moves today and where motion would help is in `docs/PROGRESS.md` before any code changes.
+  - Every timing and easing lives in `tokens.css`, named for what it shows; JavaScript starts animations only through `client/src/utils/motion.js`.
+  - The "still working" signals are rebuilt: the loading strip and a working button wait before they show (no flash on a quick answer), the dashes pull away and then cruise, and the `/status` mark is replaced by an unpainted outline whose dashes run round it, painted solid (passed) or replaced by the warning sign (failed) when the answer arrives.
+  - Built and reasoned: plates pressed (down fast, up slower) on buttons, day stones, trip rows, choice plates and tick boxes; the tab cap painted in the direction you moved; the picked day stone painted up from its base; the day's stops travelling in from the side of the road you moved to; stops sliding to their new places (best order, a stop inserted by time, a stop removed); wet paint on the row you just added (stop, packing item, bill or payment, invite link); a new stop's map stone rising out of the ground; choice plates, packing ticks, the role plate and the Explore pick painted on; the packed and budget strips' paint edge moving; the dialog band painted across.
+  - Only `transform` and `opacity` are animated. Nothing plays on page load, nothing loops except the road dash, nothing makes a control wait.
+  - `prefers-reduced-motion`: every animation has a calm version (stands still, instant, or a plain fade), and it is checked in a real browser.
+  - The slop guard has a Motion group (properties, raw timings, missing reduced-motion rules, loops, hover transforms, scroll reveals, smooth scrolling, animation outside the helper, motion and count-up libraries, bouncy easing, slop keyframe names, Recharts' own animation) and a self-test in `npm.cmd test` that proves every rule fires.
+  - After each chunk: `npm.cmd test`, `node checks/slopGuard.mjs` and the client build pass, one local commit per area.
+  - At the end: the new Motion section of the check passes locally on its own, then `main` is pushed once, the Worker deployed, and `npm.cmd run check -- --live` passes once; the test-account pool is deleted again afterwards.

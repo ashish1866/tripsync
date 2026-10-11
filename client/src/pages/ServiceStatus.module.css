@@ -45,6 +45,7 @@
 
 /* Solid ink square = passed, red triangle = failed, dashed square = checking */
 .mark {
+  position: relative;
   width: 0.9rem;
   height: 0.9rem;
   align-self: center;
@@ -54,9 +55,33 @@
   background: var(--ink);
 }
 
-.loading .mark {
-  border: 2px dashed var(--ink);
-  animation: turn 1.6s linear infinite;
+/* Checking: the dashed outline is four strips of road dash, one per edge.
+   Each edge is the same square turned a quarter further, with its strip
+   along its own bottom, so the dashes run round clockwise. */
+.edge {
+  position: absolute;
+  inset: 0;
+}
+
+.left {
+  transform: rotate(90deg);
+}
+
+.top {
+  transform: rotate(180deg);
+}
+
+.right {
+  transform: rotate(270deg);
+}
+
+.strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  overflow: hidden;
 }
 
 .error .mark {
@@ -69,15 +94,41 @@
   font-weight: 500;
 }
 
-@keyframes turn {
+/* The answer arrives. Passed: the square is painted solid, base to top, in
+   one stroke. Failed: the warning sign is put up from its base. */
+.ok .arrived {
+  transform-origin: bottom;
+  animation: paint-up var(--t-paint) var(--ease-brush) both;
+}
+
+.error .arrived {
+  animation: put-up var(--t-plant) var(--ease-settle) both;
+}
+
+@keyframes paint-up {
+  from {
+    transform: scaleY(0);
+  }
   to {
-    transform: rotate(90deg);
+    transform: scaleY(1);
   }
 }
 
-/* The turning mark only says "still checking"; with reduced motion it stands still. */
+@keyframes put-up {
+  from {
+    transform: translateY(40%);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Calm version: the dashes stand still (RoadDashes), and the answer simply appears. */
 @media (prefers-reduced-motion: reduce) {
-  .loading .mark {
+  .ok .arrived,
+  .error .arrived {
     animation: none;
   }
 }

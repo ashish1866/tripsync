@@ -11,6 +11,7 @@ import '@fontsource/mukta/700.css';
 
 import './styles/tokens.css';
 import './styles/global.css';
+import './styles/motion.css';
 import App from './App';
 
 createRoot(document.getElementById('root')).render(

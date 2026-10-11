@@ -1,0 +1,55 @@
+/*
+  Motion shared by several screens. Timings and easings come from tokens.css;
+  the reasons are in docs/DESIGN-DECISIONS.md, "Motion".
+
+  Wet paint: the row you just added gets a cap-yellow band down its left edge,
+  painted top to bottom in one stroke. It stays wet for a moment, then dries
+  away, and the row looks exactly as it did before. It answers "where did my
+  new item go?" on a long list, and never plays for rows that were already there.
+  Put the class on the new row only (the pages keep the id of what they added).
+*/
+.ts-wet {
+  position: relative;
+}
+
+.ts-wet::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  background: var(--cap);
+  transform-origin: top;
+  pointer-events: none;
+  animation:
+    ts-paint-down var(--t-paint) var(--ease-brush) both,
+    ts-dry var(--t-dry) var(--ease-settle) var(--t-wet) both;
+}
+
+@keyframes ts-paint-down {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ts-dry {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Calm version: no stroke. The band is simply there, then fades: a plain fade.
+   !important and the class selector win over global.css's blanket rule, which
+   would otherwise shorten this fade to nothing and hide the band. */
+@media (prefers-reduced-motion: reduce) {
+  .ts-wet::after {
+    animation: ts-dry var(--t-dry) var(--ease-settle) var(--t-wet) both !important;
+  }
+}

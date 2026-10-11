@@ -71,11 +71,18 @@
   border-radius: var(--radius-sm);
   color: var(--ink);
   text-decoration: none;
+  transition: transform var(--t-release) var(--ease-settle);
 }
 
 .row:hover {
   outline: 2px solid var(--ink);
   outline-offset: -4px;
+}
+
+/* Pressed: the whole board goes down 1px at once, like a button */
+.row:active {
+  transform: translateY(1px);
+  transition-duration: var(--t-press);
 }
 
 .row:hover .name {
@@ -112,5 +119,12 @@
   .row {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/* Calm version: the press still shows, with no transition */
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    transition: none;
   }
 }

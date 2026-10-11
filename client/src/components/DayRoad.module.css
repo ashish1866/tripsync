@@ -37,12 +37,13 @@
   font-weight: 500;
 }
 
-/* As buttons: the same states as every other control */
+/* As buttons: the same states as every other control. Pressed: down 1px at
+   once, back up a little slower, like every painted plate. */
 .button {
   font: inherit;
   cursor: pointer;
   padding: 0;
-  transition: transform var(--fast) var(--ease);
+  transition: transform var(--t-release) var(--ease-settle);
 }
 
 .button:hover {
@@ -52,6 +53,7 @@
 
 .button:active {
   transform: translateY(1px);
+  transition-duration: var(--t-press);
 }
 
 /* Keep the stone's dome shape when the focus ring is drawn around it */
@@ -72,4 +74,11 @@
 
 .selected:hover {
   outline-color: var(--ink);
+}
+
+/* Calm version: the press still shows, with no transition */
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
 }

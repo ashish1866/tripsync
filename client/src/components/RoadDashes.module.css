@@ -1,19 +1,30 @@
 /*
-  The row of dashes slides left by exactly one dash plus one gap, then starts
-  again. After that shift the row looks the same as before, so the loop has no
-  visible jump: the line just seems to keep moving, like a road under a bus.
+  "Still working": the road passing under a bus.
+  1. Nothing shows until --dash-wait has passed (the loading strip and a
+     working button wait --t-wait, so a quick answer never flashes them).
+  2. The dashes pull away: they speed up evenly from standing still, over one
+     dash plus one gap, and reach cruising speed exactly as...
+  3. ...the steady slide takes over: the row moves left by one dash plus one
+     gap and starts again. After that shift it looks the same as before, so the
+     loop has no visible jump.
+  The pull-away lasts twice one slide: speeding up evenly from zero over the
+  same distance ends at exactly the slide's speed, so there is no lurch.
+  This is the only animation in TripSync that loops.
 */
 .track {
   display: flex;
   gap: var(--dash-gap);
   width: max-content;
-  animation: slide var(--dash-speed) linear infinite;
+  animation:
+    appear var(--t-appear) var(--ease-settle) var(--dash-wait) both,
+    pull-away calc(var(--dash-speed) * 2) var(--ease-pull-away) var(--dash-wait) both,
+    slide var(--dash-speed) var(--ease-road) calc(var(--dash-wait) + var(--dash-speed) * 2) infinite;
 }
 
 .dash {
   flex: none;
   width: var(--dash-length);
-  height: 3px;
+  height: var(--dash-height);
   background: var(--dash-paint);
 }
 
@@ -21,26 +32,64 @@
 .road {
   --dash-length: 1.25rem;
   --dash-gap: 1rem;
+  --dash-height: 3px;
   --dash-paint: var(--stone);
-  --dash-speed: 0.7s;
+  --dash-speed: var(--t-road);
+  --dash-wait: var(--t-wait);
 }
 
 /* Along the bottom of a working button: short ink dashes */
 .button {
   --dash-length: 0.6rem;
   --dash-gap: 0.4rem;
+  --dash-height: 3px;
   --dash-paint: var(--ink);
-  --dash-speed: 0.6s;
+  --dash-speed: var(--t-road-near);
+  --dash-wait: var(--t-wait);
 }
 
-@keyframes slide {
+/* Round the /status checking mark: tiny dashes, the outline itself. No wait:
+   the mark IS the "checking" state, shown at once. */
+.mark {
+  --dash-length: 4px;
+  --dash-gap: 3px;
+  --dash-height: 2px;
+  --dash-paint: var(--ink);
+  --dash-speed: var(--t-road-near);
+  --dash-wait: 0ms;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pull-away {
+  from {
+    transform: translateX(0);
+  }
   to {
     transform: translateX(calc(-1 * (var(--dash-length) + var(--dash-gap))));
   }
 }
 
+@keyframes slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * (var(--dash-length) + var(--dash-gap))));
+  }
+}
+
+/* Calm version: the dashes stand still. The wait before they show stays
+   (it is not motion; --t-appear is 0 here, so they simply appear). */
 @media (prefers-reduced-motion: reduce) {
   .track {
-    animation: none;
+    animation: appear var(--t-appear) var(--ease-settle) var(--dash-wait) both;
   }
 }

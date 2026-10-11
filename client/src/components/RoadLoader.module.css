@@ -1,8 +1,28 @@
+/* A wait shorter than --t-wait shows nothing at all, so a quick answer never
+   flashes a loader for a frame. Screen readers get the sentence at once
+   (opacity does not hide it from them). The dashes inside wait the same time. */
 .wrap {
   display: grid;
   gap: var(--space-3);
   justify-items: start;
   width: min(20rem, 100%);
+  animation: appear var(--t-appear) var(--ease-settle) var(--t-wait) both;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Calm version: the same wait (it is not motion), then it is simply there. */
+@media (prefers-reduced-motion: reduce) {
+  .wrap {
+    animation: appear var(--t-appear) var(--ease-settle) var(--t-wait) both;
+  }
 }
 
 .fullPage {

@@ -10,6 +10,39 @@ Resolved on 2026-10-12, for the record:
 - **The live forecast.** Open-Meteo refuses Render's shared address on some days (HTTP 429, "Daily API request limit exceeded"). Visual Crossing is now the first backup (15 days, limit counted per key), OpenWeather the second (5 days, only if its key is set). Ashish added `VISUALCROSSING_KEY` on Render; it is live, and the weather box says which service answered, with "Powered by Visual Crossing Weather" when it did.
 - **The live database.** Ashish chose to switch. Indexes were created in `tripsync` first; `render.yaml` now says `MONGODB_DB: tripsync`, and Render applied it on its own when it was pushed (the live API reported `tripsync` from 22:18 UTC). Development and the local check stay on `tripsync_dev`. The Haldwani trip Ashish made earlier is still in `tripsync_dev`, not on the live site.
 - **The live check** asks the API which database it uses (no more guessing), and its weather checks accept whichever service answered. **`npm.cmd run check -- --live`: 386/386**, with Visual Crossing answering. Medians of 10 through the Worker: ping 312 ms, `GET /api/health` 375 ms, `GET /api/users/me` 371 ms; first request 814 ms. Then the test-account pool was deleted from Firebase and wiped from both databases: 0 accounts left in the pool file, 0 test profiles in MongoDB, the fresh-account ledger empty.
+
+## Step 11: Motion revamp (in progress)
+Inventory, written before any code changed (12-Oct-2026).
+
+What moves today:
+1. `RoadDashes` on the loading strip (`RoadLoader`): dashes slide left one dash plus gap every 0.7 s, linear, forever. Used for: checking your login, your trips, the trip, the forecast, settle up and budget, the bills, the invites, nearby places, best order, reading an invite. Stands still under reduced motion.
+2. `RoadDashes` along the bottom of a working `Button`: 0.6 s, linear, forever. Shows the instant the button turns busy, so a quick save flashes it for a frame.
+3. `/status`: the "still checking" dashed square turns a quarter turn every 1.6 s, linear, forever. The passed square and failed triangle replace it with no change in between.
+4. Button press: down 1 px, with a 120 ms transition on both `transform` and `background-color` (the colour one is not transform/opacity). Release takes as long as the press.
+5. Day stones (as buttons on the Day plan): down 1 px on press, 120 ms.
+6. Hover everywhere: outlines get heavier at once (buttons, plates, rows, ticks, day stones, fields); tabs fill yellow; links thicken. No motion, and this stays.
+7. Leaflet's own motion: zoom animation, tile fade-in, animated pan and zoom when the map fits its pins, drag inertia. None of it is switched off under reduced motion (the global rule only cuts CSS transitions; Leaflet pans with JavaScript).
+8. A global reduced-motion rule in `global.css` cuts every CSS animation and transition to 0.01 ms.
+9. Recharts: its own bar animation is already off. Focus jumping to the first field error is instant.
+
+Where motion would help someone see what just happened:
+- A. Picking a day stone: the yellow jumps, and the day's stops swap with nothing saying forward or back along the road.
+- B. Switching tabs: the yellow cap strip jumps from one tab to another.
+- C. "Use this order": the stops reorder at once; you cannot see which ones moved where.
+- D. Adding a stop puts it in time order, so rows below jump down; removing one closes the gap at once. The new row is not marked.
+- E. A new stop's pin appears on the map with no cue.
+- F. Packing: a new item lands at the bottom of a long list unmarked; a tick flips at once; the packed strip's edge jumps.
+- G. Money: a new bill or a payment marked as paid appears unmarked in the ledger; the budget strip's edge jumps.
+- H. Members: a new invite link appears unmarked; changing a role swaps the ink plate's word at once.
+- I. Choice plates (invite role, bill split, Explore category): the yellow jumps.
+- J. Dialogs: the red or yellow band, which is the message, appears with everything else.
+- K. Explore: picking a place jumps the list; the yellow band appears at once.
+- L. Loading strips flash for quick answers (5 to 40 ms locally, about 370 ms live).
+- M. Working buttons flash their dashes on quick saves.
+- N. `/status`: results replace the checking mark with no change between.
+- O. Trip rows on Your trips, choice plates and tick boxes have no pressed state (design.md asks for one on every control).
+
+Considered and left still, on purpose: the landing page, page loads and data arriving on load (the forecast filling the stones, search results, the trips list), tab content, hover and focus, warnings and field errors, number changes (no counting), settle-up turning square (no celebration), the chart, Explore's result pins.
 ## Step 10: Demo prep and ship (done except the demo trip, see Blocked; not ticked)
 - Done: (1) the fixed test-account pool was deleted from Firebase before the first push, each account proved gone by a failed log-in, and 0 test profiles remain in MongoDB; the live check recreated it, so it was deleted and proved gone again afterwards (ledger empty, pool file empty). (2) `tripsync_app` can use a new database `tripsync` (write, read, delete tested). (3) `npm run seed`: loads a Manali demo trip (4 days, 12 stops, 10 with real map points, Rs 45,000 budget, 14 bills with equal and exact splits and one marked-as-paid payment, a packing list 5 of 8 packed, three demo friends). The content is built by pure code with 11 unit tests (every bill passes the same zod rules as the API, shares add up exactly, settle up clears to zero). I also ran the real script against a scratch database: it refuses a missing owner, an owner with no profile, a bad date and an unknown option; loads the trip; replaces it cleanly on a re-run without touching another trip; `--remove` takes out only the demo; and the app's own settle-up and budget code read it correctly (scratch database dropped afterwards). (4) README: what the app does, run instructions, the demo and a five-minute walk through it, the check and the test-account pool, the API table, measured speed. (5) Secret scan: none of the Atlas link, its password or the Geoapify key appears in any committed file or in the history; no private file is tracked. (6) Pushed to `main` and deployed (Render builds on push; the Worker with `npm run deploy`).
 - Pushes: the plan was one. It was four (b2d2684, 1b676c9, b22c410, 2729bc1) because the live check found real defects that only exist on the live setup, each fixed and explained below.

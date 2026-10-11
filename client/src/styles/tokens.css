@@ -56,18 +56,43 @@
   --radius-sm: 3px;
   --radius-dome: 999px 999px 0 0;  /* the rounded top of a kilometre stone */
 
-  /* Motion: short and plain, no bounce */
-  --ease: cubic-bezier(0.2, 0, 0, 1);
-  --fast: 120ms;
-  --medium: 220ms;
+  /* Motion. Every timing and easing in TripSync is here, named for what it
+     shows on the road (reasons: DESIGN-DECISIONS, "Motion"). Only transform
+     and opacity are ever animated, and nothing bounces. */
+  --ease-road: linear;                            /* the road passing under the bus: constant speed */
+  --ease-pull-away: cubic-bezier(0.33, 0, 0.67, 0.33); /* a bus pulling away: speeds up evenly (t squared), ends at cruising speed */
+  --ease-brush: cubic-bezier(0.3, 0, 0.15, 1);    /* one brush stroke: a firm start, easing off as the paint runs out */
+  --ease-settle: cubic-bezier(0.2, 0, 0, 1);      /* something heavy coming to rest, with no overshoot */
+
+  --t-press: 50ms;      /* a plate going down under the finger: at once */
+  --t-release: 150ms;   /* ...and coming back up, a little slower */
+  --t-paint: 180ms;     /* one brush stroke */
+  --t-travel: 220ms;    /* moving one day along the road */
+  --t-shift: 280ms;     /* stops sliding to their new places; a strip's paint edge moving */
+  --t-plant: 240ms;     /* a stone rising out of the ground; a sign put up */
+  --t-appear: 160ms;    /* a loader fading in once the wait is real */
+  --t-road: 700ms;      /* loading strip: one dash plus one gap passes */
+  --t-road-near: 600ms; /* working button and the /status mark: shorter dashes, close up */
+  --t-wait: 400ms;      /* a wait shorter than this shows no loader at all */
+  --t-wet: 1400ms;      /* fresh paint stays wet this long... */
+  --t-dry: 600ms;       /* ...then dries away */
+  --t-fade: 150ms;      /* a plain fade: the calm version of travelling */
 
   /* Focus ring: always visible, on any surface */
   --focus: 0 0 0 3px var(--stone), 0 0 0 6px var(--ink);
 }
 
+/* Reduced motion: everything that moves becomes instant or stands still.
+   Kept: the wait before a loader shows (not motion), and the wet-paint and
+   plain-fade timings, because their calm versions are plain fades. */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --fast: 0ms;
-    --medium: 0ms;
+    --t-press: 0ms;
+    --t-release: 0ms;
+    --t-paint: 0ms;
+    --t-travel: 0ms;
+    --t-shift: 0ms;
+    --t-plant: 0ms;
+    --t-appear: 0ms;
   }
 }

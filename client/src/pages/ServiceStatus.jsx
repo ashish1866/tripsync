@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import api, { errorMessage } from '../api/client';
 import Wordmark from '../components/Wordmark';
 import Button from '../components/Button';
+import RoadDashes from '../components/RoadDashes';
 import styles from './ServiceStatus.module.css';
 
 // /status: shows which part of TripSync is answering.
@@ -68,10 +69,35 @@ export default function ServiceStatus() {
   );
 }
 
+// The checking mark is an unpainted (outline-only) square whose dashed edge
+// runs round it like the road dash: still working. When the answer arrives it
+// is painted solid (passed) or the warning sign goes up (failed). Only a row
+// that was checking gets that arrival; the Website row is passed from the start.
+const EDGES = ['bottom', 'left', 'top', 'right'];
+
+function Mark({ state }) {
+  const wasChecking = useRef(state === 'loading');
+  if (state === 'loading') wasChecking.current = true;
+  if (state === 'loading') {
+    return (
+      <span className={styles.mark} aria-hidden="true">
+        {EDGES.map((edge) => (
+          <span key={edge} className={`${styles.edge} ${styles[edge]}`}>
+            <span className={styles.strip}>
+              <RoadDashes size="mark" />
+            </span>
+          </span>
+        ))}
+      </span>
+    );
+  }
+  return <span key={state} className={`${styles.mark} ${wasChecking.current ? styles.arrived : ''}`} aria-hidden="true" />;
+}
+
 function Check({ state, label, text }) {
   return (
     <li className={`${styles.check} ${styles[state]}`}>
-      <span className={styles.mark} aria-hidden="true" />
+      <Mark state={state} />
       <span className={styles.label}>{label}</span>
       <span className={styles.value}>
         <span className="visually-hidden">
