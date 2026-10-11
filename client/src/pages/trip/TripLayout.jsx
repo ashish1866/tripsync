@@ -14,6 +14,7 @@ import styles from './TripLayout.module.css';
 const TABS = [
   { to: '', label: 'Overview', end: true },
   { to: 'plan', label: 'Day plan' },
+  { to: 'money', label: 'Money' },
   { to: 'members', label: 'Members' },
   { to: 'settings', label: 'Trip settings', who: ['owner'] },
 ];

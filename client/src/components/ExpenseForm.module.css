@@ -1,0 +1,66 @@
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-4);
+}
+
+.exact {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+}
+
+.exactGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-3);
+}
+
+.total {
+  margin: var(--space-3) 0 0;
+  font-weight: 500;
+}
+
+/* Shares that do not add up: road-sign red, the same as any problem */
+.off {
+  color: var(--signal);
+}
+
+.error {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  color: var(--signal);
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+
+.error::before {
+  content: '';
+  flex: none;
+  width: 0.7rem;
+  height: 0.62rem;
+  background: var(--signal);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}

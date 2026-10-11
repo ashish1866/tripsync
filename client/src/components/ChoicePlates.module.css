@@ -76,6 +76,65 @@
   box-shadow: var(--focus);
 }
 
+/* Smaller plates (people in a split) */
+.compact .plates {
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-2);
+}
+
+.compact .face {
+  padding: var(--space-2) var(--space-3);
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: var(--space-2);
+}
+
+.compact .label {
+  font-size: var(--text-md);
+}
+
+.compact .hint {
+  grid-column: 2;
+}
+
+/* With `multiple`: a painted square that fills with ink when ticked */
+.tick {
+  width: 1rem;
+  height: 1rem;
+  border: var(--line);
+  border-radius: 2px;
+  background: var(--stone);
+}
+
+.input:checked + .face .tick {
+  background: var(--ink);
+  outline: 2px solid var(--stone);
+  outline-offset: -4px;
+}
+
+.invalid .face {
+  border-color: var(--signal);
+}
+
+.error {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  color: var(--signal);
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+
+.error::before {
+  content: '';
+  flex: none;
+  width: 0.7rem;
+  height: 0.62rem;
+  background: var(--signal);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
 .set:disabled .plate {
   cursor: not-allowed;
   opacity: 0.6;

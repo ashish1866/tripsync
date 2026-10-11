@@ -19,6 +19,11 @@ export async function loadTripForMember(db, tripId, uid) {
   if (!trip) throw new HttpError(404, 'This trip does not exist, or it was deleted.');
   const names = await namesFor(db, trip.members.map((m) => m.uid));
   const me = trip.members.find((m) => m.uid === uid);
+  // Spending so far (settlements are not spending), for the overview's budget strip.
+  const [spentRow] = await db
+    .collection('expenses')
+    .aggregate([{ $match: { tripId, type: 'expense' } }, { $group: { _id: null, spent: { $sum: '$amount' } } }])
+    .toArray();
   return {
     id: trip._id.toString(),
     name: trip.name,
@@ -26,6 +31,7 @@ export async function loadTripForMember(db, tripId, uid) {
     startDate: trip.startDate,
     endDate: trip.endDate,
     budget: trip.budget,
+    spent: spentRow?.spent || 0,
     owner: trip.owner,
     myRole: me.role,
     members: trip.members.map((m) => ({ uid: m.uid, role: m.role, joinedAt: m.joinedAt, name: names.get(m.uid) || 'Former member' })),

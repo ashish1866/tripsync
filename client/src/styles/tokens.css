@@ -15,6 +15,15 @@
   --signal-wash: #f6dcd9; /* pale red ground behind a warning */
   --signal-pressed: #961811; /* the red while a delete button is held down */
 
+  /* The kilometre stone colour code, used ONLY for budget categories.
+     On Indian roads the cap colour says what kind of road you are on. */
+  --km-national: var(--cap); /* yellow: National Highway */
+  --km-state: #1d7a3e;       /* green: State Highway */
+  --km-district: #1f5ba8;    /* blue: district road */
+  --km-village: #e3731c;     /* orange: village road (PMGSY) */
+  --km-city: var(--ink);     /* black: city road */
+  --km-plain: var(--stone);  /* unpainted stone, outlined in ink */
+
   /* Type: Anek for painted lettering, Mukta for reading */
   --font-display: 'Anek Latin Variable', 'Anek Devanagari Variable', 'Mukta', sans-serif;
   --font-body: 'Mukta', 'Anek Devanagari Variable', sans-serif;

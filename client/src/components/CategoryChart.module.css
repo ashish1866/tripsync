@@ -1,0 +1,54 @@
+.figure {
+  margin: 0;
+}
+
+.chart {
+  width: 100%;
+}
+
+.bar {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+/* The kilometre stone colour code (tokens --km-*) */
+.national {
+  fill: var(--km-national);
+}
+.state {
+  fill: var(--km-state);
+}
+.district {
+  fill: var(--km-district);
+}
+.village {
+  fill: var(--km-village);
+}
+.city {
+  fill: var(--km-city);
+}
+.plain {
+  fill: var(--km-plain);
+}
+
+.tick {
+  fill: var(--ink);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.amount {
+  fill: var(--ink);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* Recharts adds a focus outline to the chart surface; it is not interactive here */
+.chart :global(.recharts-surface:focus),
+.chart :global(.recharts-wrapper:focus) {
+  outline: none;
+}

@@ -30,7 +30,7 @@ Open-Meteo forecast through the 3-hour `weatherCache` (location rounded to 2 dec
 Invite link/code (Editor or Viewer, 7 days, expiry checked in code). Join works for a logged-out visitor (log in, come back to the invite). Owner changes roles and removes members; owner cannot leave; a member who owes money cannot be removed. Rate limits on invite join and outside-API routes, counted per Firebase user, in Express.
 - Done when: a second test account joins; a Viewer gets 403 on every write route; an expired invite shows the expired message; joining twice says "You're already in this trip".
 
-## - [ ] Step 6: Expenses, budget, settle up
+## - [x] Step 6: Expenses, budget, settle up
 Add/edit/delete (editors only their own). Equal or exact splits in paise with the leftover-paise rule. Budget by category in one aggregation, settlements excluded, chart themed with our tokens (milestone colour code), not Recharts defaults. Settle up: biggest debtor pays biggest creditor until zero. "Mark as paid" stored as a settlement.
 - Done when: unit tests pass for equal, uneven, rounding (Rs 1,000 / 3), already settled, and one-person-paid-everything; the brief's example gives Ankit -> Ashish 2,500, Rohan -> Ashish 2,500, Rahul -> Ashish 500; splits that do not add up get 400; an editor editing someone else's expense gets 403.
 

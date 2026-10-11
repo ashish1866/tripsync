@@ -24,7 +24,7 @@ async function checkMember(rawId, req, next) {
   const trips = (await getDb()).collection('trips');
   const trip = await trips.findOne(
     { _id: tripId, 'members.uid': req.user.uid },
-    { projection: { owner: 1, members: 1, startDate: 1, endDate: 1, destination: 1 } },
+    { projection: { owner: 1, members: 1, startDate: 1, endDate: 1, destination: 1, budget: 1 } },
   );
 
   if (!trip) {

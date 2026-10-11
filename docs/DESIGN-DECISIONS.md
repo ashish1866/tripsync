@@ -135,6 +135,22 @@ Data choices:
 - Moving a stop to another day is one update computed inside MongoDB (take it out of every day, add it to the end of the new day), so other stops added meanwhile are kept.
 - At most 30 stops per day (409 with the reason). The stop search looks within 60 km of the destination, nearest first, through our API, so the Geoapify key never reaches the browser.
 
+## Money (Step 6)
+
+- **Money tab** (`/trips/:id/money`), a ledger in three parts, in the order people need them: Settle up, Budget, Bills.
+- **Settle up:** one slip per payment, "Dhruv Grover pays you ₹3,000". The amount still owed is road-sign red: money owed is one of the three things red is for. "Mark as paid" asks first in the TripSync dialog with a yellow band (it destroys nothing, so it does not get the red one) and says to mark it only once money has really changed hands. When nobody owes anything: one plain line, "Everyone is square. Nobody owes anybody." No celebration. Under it, a table of each person: paid, share, and "Gets back ₹3,000" / "Owes ₹3,000" (red) / "Square".
+- **Budget:** the same budget strip as My Trips, then "Spent by category" as horizontal painted bars. **The category colours are the real kilometre stone code** (section 4 promised this): the cap colour of an Indian milestone tells you the kind of road. Stay is yellow (National Highway), Travel green (State Highway), Activities blue (district road), Food orange (village road), Shopping black (city road), Other an unpainted stone. These six colours are tokens (`--km-*`) and are used for nothing else. Each bar has the 2px ink outline and is labelled with its amount in Anek; there is no tooltip, legend, grid or axis line. Recharts only lays the bars out (`CategoryChart`): the bar shape, colours and lettering are ours, and a hidden table gives screen readers the same numbers.
+- **Bills:** one row per bill: a small stone cap in its category colour, what it was for, category, who paid and when, how it was split, each person's share, and the amount. Payments marked as paid sit in the same list with an unpainted dashed cap and the words "Not counted as spending". Edit and Delete appear only on bills you may change (owner: all; editor: the ones they added). Empty: a dashed, unpainted bill slip and one sentence.
+- **Add/edit a bill:** what, amount, category, paid by, date; then "Equally" or "Exact amounts" as the same choice plates as the invite board. Equally: a plate per person, ticked to share it, each showing their share as you type ("₹4,000"). Exact: a box per person and a running line ("₹2,500 of ₹3,000 shared. ₹500 still to share."), red until it adds up; saving with shares that do not add up is stopped under the shares with "Splits must add up to ₹3,000".
+- Overview: the budget line became the budget strip (spent of budget), with a link to the money.
+
+Data choices:
+- Categories: stay, travel, food, activities, shopping, other. A settlement's category is "settlement" and can only be made by "Mark as paid".
+- The whole bill is sent on edit (amount and split belong together), and only that one document changes. A payment cannot be edited into a bill; it can be deleted.
+- "Mark as paid" may not pay more than both people owe and are owed (400 with the most that can be marked), so a typo cannot create a new debt the other way.
+- Settle-up ties go to whoever comes first in the trip's member order (owner first, then by joining), so the list does not reshuffle between visits.
+- Budget by category is one MongoDB aggregation (`$match` this trip and `type: expense`, `$group` by category); settlements never count as spending anywhere (trip list, overview, budget).
+
 ## Members and invites (Step 5)
 
 - **Members tab:** the group as a route board, one row per person: name, a small ink plate with the role and what it allows in a plain sentence, and the join date. The owner's rows carry "Make viewer / Make editor" and "Remove" buttons; nobody else sees them. Your own row says "You". The owner's page ends with one line saying why they cannot leave; everyone else gets a "Leave this trip" board with the same red band as deleting a trip.
@@ -174,6 +190,8 @@ Data choices:
 - A stranger gets 403 on a trip that exists and 404 on one that does not.
 
 ## Change log
+
+- 2026-10-11, Step 6: Money tab (settle up, budget with kilometre-stone category colours, bills), `CategoryChart`, `ExpenseForm`; six `--km-*` colour tokens; ChoicePlates can now be multi-select with errors; ConfirmDialog has a calm yellow-band version and a custom cancel label.
 
 - 2026-10-11, Step 5: Members tab (group board, invite board, leave board), invite page `/join/:code`, "Got an invite code?" box on Your trips, shared `ChoicePlates`. The Overview now reads role names from one shared file.
 

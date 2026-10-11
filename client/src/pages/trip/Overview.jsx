@@ -3,7 +3,8 @@ import DayRoad from '../../components/DayRoad';
 import TripMap from '../../components/TripMap';
 import DayWeather from '../../components/DayWeather';
 import WeatherBox from '../../components/WeatherBox';
-import { formatRupees, placeLine, plural } from '../../utils/format';
+import BudgetBar from '../../components/BudgetBar';
+import { placeLine, plural } from '../../utils/format';
 import { tripPins } from '../../utils/pins';
 import { ROLE_LABEL } from '../../utils/roles';
 import styles from './Overview.module.css';
@@ -44,7 +45,10 @@ export default function Overview() {
           <h2 id="money-title" className={styles.heading}>
             Budget
           </h2>
-          <p className={styles.budget}>{trip.budget ? `${formatRupees(trip.budget)} for the whole group.` : 'No budget set.'}</p>
+          <BudgetBar spent={trip.spent} budget={trip.budget} />
+          <p className={styles.note}>
+            <Link to="money">Open the money</Link> for bills and who pays whom.
+          </p>
         </section>
         <section aria-labelledby="group-title">
           <h2 id="group-title" className={styles.heading}>

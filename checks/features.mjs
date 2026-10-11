@@ -31,7 +31,190 @@ export async function addMember(ctx, tripId, user, role) {
   await ctx.db.collection('trips').updateOne({ _id: new ObjectId(tripId) }, { $push: { members: { uid: user.uid, role, joinedAt: new Date() } } });
 }
 
-const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks];
+const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks];
+
+// ====================== Step 6: expenses, budget, settle up ======================
+async function moneyChecks(ctx) {
+  const { call, record, hasError, db } = ctx;
+  ctx.setSection('Money API');
+
+  const ashish = await ctx.newUser('cashashish', 'Ashish Money');
+  const rahul = await ctx.newUser('cashrahul', 'Rahul Money');
+  const ankit = await ctx.newUser('cashankit', 'Ankit Money');
+  const rohan = await ctx.newUser('cashrohan', 'Rohan Money');
+  const viewer = await ctx.newUser('cashviewer', 'Kabir Money');
+  const stranger = await ctx.newUser('cashstranger', 'Stranger Money');
+  const trip = await makeTrip(ctx, ashish, { budget: 1_200_000 });
+  for (const u of [rahul, ankit, rohan]) await addMember(ctx, trip.id, u, 'editor');
+  await addMember(ctx, trip.id, viewer, 'viewer');
+  const t = `/trips/${trip.id}`;
+  const four = [ashish.uid, rahul.uid, ankit.uid, rohan.uid];
+  const name = new Map([ashish, rahul, ankit, rohan, viewer].map((u) => [u.uid, u.name.split(' ')[0]]));
+  const said = (transfers) => (transfers || []).map((x) => `${name.get(x.from)} -> ${name.get(x.to)} ${x.amount / 100}`).join(', ');
+  const bill = (title, amount, paidBy, split, category = 'stay') => ({ title, amount, category, paidBy, date: dayFromToday(5), split });
+
+  // The brief's example
+  const hotel = await call('POST', `${t}/expenses`, { token: ashish.token, body: bill('Hotel, 2 nights', 800000, ashish.uid, { type: 'equal', among: four }) });
+  const cabs = await call('POST', `${t}/expenses`, { token: rahul.token, body: bill('Cabs to Solang', 200000, rahul.uid, { type: 'equal', among: four }, 'travel') });
+  record('Ashish adds Rs 8,000 hotel and Rahul Rs 2,000 cabs, each split 4 ways: 201', hotel.status === 201 && cabs.status === 201 && hotel.data.expense.splits.every((s) => s.share === 200000), `HTTP ${hotel.status}/${cabs.status} ${hotel.data?.error ?? cabs.data?.error ?? ''}`);
+  const s1 = await call('GET', `${t}/settlements`, { token: viewer.token });
+  record("Settle up gives the brief's answer: Ankit -> Ashish 2,500, Rohan -> Ashish 2,500, Rahul -> Ashish 500", s1.status === 200 && said(s1.data.transfers) === 'Ankit -> Ashish 2500, Rohan -> Ashish 2500, Rahul -> Ashish 500', said(s1.data?.transfers) || `HTTP ${s1.status}`);
+  const bal = Object.fromEntries((s1.data?.people || []).map((p) => [name.get(p.uid), p.balance / 100]));
+  record('Balances: Ashish +5,500, Rahul -500, Ankit -2,500, Rohan -2,500, and they add up to zero', bal.Ashish === 5500 && bal.Rahul === -500 && bal.Ankit === -2500 && bal.Rohan === -2500 && Object.values(bal).reduce((a, b) => a + b, 0) === 0, JSON.stringify(bal));
+
+  // Rounding and exact splits
+  const third = await call('POST', `${t}/expenses`, { token: ankit.token, body: bill('Dinner at Johnson Cafe', 100000, ankit.uid, { type: 'equal', among: [ankit.uid, rahul.uid, rohan.uid] }, 'food') });
+  const shares = third.data?.expense?.splits?.map((s) => s.share);
+  record('Rs 1,000 split 3 ways: 333.34 + 333.33 + 333.33, the leftover paisa to the first person', JSON.stringify(shares) === '[33334,33333,33333]', JSON.stringify(shares));
+  const exactOk = await call('POST', `${t}/expenses`, { token: rohan.token, body: bill('Paragliding', 450000, rohan.uid, { type: 'exact', shares: [{ uid: rohan.uid, share: 300000 }, { uid: ashish.uid, share: 150000 }] }, 'activities') });
+  record('An exact split that adds up: 201', exactOk.status === 201, `HTTP ${exactOk.status} ${exactOk.data?.error ?? ''}`);
+  const exactBad = await call('POST', `${t}/expenses`, { token: rohan.token, body: bill('Paragliding', 450000, rohan.uid, { type: 'exact', shares: [{ uid: rohan.uid, share: 300000 }, { uid: ashish.uid, share: 100000 }] }, 'activities') });
+  record('Splits that do not add up: 400 "Splits must add up to Rs 4,500"', exactBad.status === 400 && /^Splits must add up to Rs 4,500\./.test(exactBad.data?.error), `HTTP ${exactBad.status} ${exactBad.data?.error}`);
+
+  const badBills = [
+    ['an amount of zero', bill('Zero', 0, ashish.uid, { type: 'equal', among: four })],
+    ['a fraction of a paisa', bill('Half', 100.5, ashish.uid, { type: 'equal', among: four })],
+    ['the amount as text', bill('Text', '8000', ashish.uid, { type: 'equal', among: four })],
+    ['a payer who is not in the trip', bill('Stranger paid', 1000, stranger.uid, { type: 'equal', among: four })],
+    ['a stranger in the split', bill('Stranger shares', 1000, ashish.uid, { type: 'equal', among: [ashish.uid, stranger.uid] })],
+    ['the same person twice', bill('Twice', 1000, ashish.uid, { type: 'equal', among: [ashish.uid, ashish.uid] })],
+    ['nobody to share it', bill('Nobody', 1000, ashish.uid, { type: 'equal', among: [] })],
+    ['an unknown category', { ...bill('Odd', 1000, ashish.uid, { type: 'equal', among: four }), category: 'settlement' }],
+    ['an impossible date', { ...bill('Date', 1000, ashish.uid, { type: 'equal', among: four }), date: '2026-02-30' }],
+    ['an extra field (type: settlement)', { ...bill('Sneaky', 1000, ashish.uid, { type: 'equal', among: four }), type: 'settlement' }],
+  ];
+  for (const [label, body] of badBills) {
+    const r = await call('POST', `${t}/expenses`, { token: ashish.token, body });
+    record(`A bill with ${label}: 400`, r.status === 400 && hasError(r), `HTTP ${r.status} ${r.data?.error ?? ''}`);
+  }
+
+  // Who may change which bill
+  const hotelId = hotel.data?.expense?.id;
+  const cabsId = cabs.data?.expense?.id;
+  const editOther = await call('PATCH', `${t}/expenses/${hotelId}`, { token: rahul.token, body: bill('Hotel, 3 nights', 900000, ashish.uid, { type: 'equal', among: four }) });
+  record("An editor editing someone else's bill: 403", editOther.status === 403 && hasError(editOther), `HTTP ${editOther.status} ${editOther.data?.error ?? ''}`);
+  const deleteOther = await call('DELETE', `${t}/expenses/${hotelId}`, { token: rahul.token });
+  record("An editor deleting someone else's bill: 403", deleteOther.status === 403, `HTTP ${deleteOther.status}`);
+  const editOwn = await call('PATCH', `${t}/expenses/${cabsId}`, { token: rahul.token, body: bill('Cabs to Solang and back', 240000, rahul.uid, { type: 'equal', among: four }, 'travel') });
+  record('An editor editing their own bill: 200, shares worked out again', editOwn.status === 200 && editOwn.data.expense.amount === 240000 && editOwn.data.expense.splits.every((s) => s.share === 60000), `HTTP ${editOwn.status} ${editOwn.data?.error ?? ''}`);
+  const ownerEdits = await call('PATCH', `${t}/expenses/${cabsId}`, { token: ashish.token, body: bill('Cabs to Solang', 200000, rahul.uid, { type: 'equal', among: four }, 'travel') });
+  record("The owner editing anyone's bill: 200", ownerEdits.status === 200, `HTTP ${ownerEdits.status}`);
+  const viewerAdd = await call('POST', `${t}/expenses`, { token: viewer.token, body: bill('Viewer bill', 1000, viewer.uid, { type: 'equal', among: [viewer.uid] }) });
+  const viewerEdit = await call('PATCH', `${t}/expenses/${hotelId}`, { token: viewer.token, body: bill('Viewer edit', 1000, ashish.uid, { type: 'equal', among: four }) });
+  const viewerDelete = await call('DELETE', `${t}/expenses/${hotelId}`, { token: viewer.token });
+  const viewerPaid = await call('POST', `${t}/settlements`, { token: viewer.token, body: { from: ankit.uid, to: ashish.uid, amount: 250000 } });
+  record('A viewer adding, editing, deleting a bill or marking a payment: 403 each', [viewerAdd, viewerEdit, viewerDelete, viewerPaid].every((r) => r.status === 403), [viewerAdd, viewerEdit, viewerDelete, viewerPaid].map((r) => r.status).join(','));
+  const strangerRead = await call('GET', `${t}/expenses`, { token: stranger.token });
+  const strangerSettle = await call('GET', `${t}/settlements`, { token: stranger.token });
+  record("A stranger reading the bills or settle up: 403", strangerRead.status === 403 && strangerSettle.status === 403, `${strangerRead.status}/${strangerSettle.status}`);
+  const otherTrip = await makeTrip(ctx, stranger);
+  const crossTrip = await call('DELETE', `/trips/${otherTrip.id}/expenses/${hotelId}`, { token: stranger.token });
+  record("Deleting this trip's bill through another trip's address: 404", crossTrip.status === 404, `HTTP ${crossTrip.status}`);
+
+  // Budget: one aggregation by category, settlements left out
+  const before = await call('GET', `${t}/budget`, { token: viewer.token });
+  const cat = Object.fromEntries((before.data?.byCategory || []).map((r) => [r.category, r.spent / 100]));
+  record('Budget by category: stay 8,000, activities 4,500, travel 2,000, food 1,000; spent 15,500 of 12,000', before.status === 200 && cat.stay === 8000 && cat.activities === 4500 && cat.travel === 2000 && cat.food === 1000 && before.data.spent === 1_550_000 && before.data.budget === 1_200_000, JSON.stringify(before.data));
+
+  // Mark as paid
+  const settle = (await call('GET', `${t}/settlements`, { token: ashish.token })).data.transfers;
+  const tooMuch = await call('POST', `${t}/settlements`, { token: ashish.token, body: { from: settle[0].from, to: settle[0].to, amount: settle[0].amount + 100 } });
+  record('Marking more as paid than is owed: 400 with the most that can be marked', tooMuch.status === 400 && /mark at most Rs/.test(tooMuch.data?.error), `HTTP ${tooMuch.status} ${tooMuch.data?.error}`);
+  const self = await call('POST', `${t}/settlements`, { token: ashish.token, body: { from: ashish.uid, to: ashish.uid, amount: 100 } });
+  record('Paying yourself: 400', self.status === 400, `HTTP ${self.status}`);
+  const marks = [];
+  for (const x of settle) marks.push((await call('POST', `${t}/settlements`, { token: rahul.token, body: x })).status);
+  const after = await call('GET', `${t}/settlements`, { token: ashish.token });
+  const stored = await db.collection('expenses').countDocuments({ tripId: new ObjectId(trip.id), type: 'settlement' });
+  record('Marking every suggested payment as paid: 201 each, stored as settlements, then nobody owes anything', marks.every((s) => s === 201) && stored === settle.length && after.data.transfers.length === 0 && after.data.people.every((p) => p.balance === 0), `${marks.join(',')}; ${stored} settlements; left: ${said(after.data?.transfers)}`);
+  const budgetAfter = await call('GET', `${t}/budget`, { token: ashish.token });
+  record('Payments are not spending: the budget total is unchanged', budgetAfter.data?.spent === before.data?.spent && !budgetAfter.data.byCategory.some((r) => r.category === 'settlement'), `${budgetAfter.data?.spent} vs ${before.data?.spent}`);
+  const tripRow = (await call('GET', '/trips', { token: ashish.token })).data.trips.find((x) => x.id === trip.id);
+  record('My trips shows the same spent total (settlements left out)', tripRow?.spent === 1_550_000, `spent ${tripRow?.spent}`);
+  const settlementId = (await call('GET', `${t}/expenses`, { token: ashish.token })).data.expenses.find((e) => e.type === 'settlement')?.id;
+  const editSettlement = await call('PATCH', `${t}/expenses/${settlementId}`, { token: ashish.token, body: bill('Change', 1000, ashish.uid, { type: 'equal', among: four }) });
+  record('A payment cannot be edited into a bill (400); it can only be deleted', editSettlement.status === 400 && hasError(editSettlement), `HTTP ${editSettlement.status}`);
+
+  // ---------- in the browser ----------
+  ctx.setSection('Money in the browser');
+  const host = await ctx.newUser('cashweb', 'Ashish Bisht');
+  const friend = await ctx.newUser('cashwebfriend', 'Dhruv Grover');
+  const webTrip = await makeTrip(ctx, host, { budget: 4_000_000 });
+  await addMember(ctx, webTrip.id, friend, 'editor');
+  const { context, page, consoleErrors } = await ctx.openPage();
+  await ctx.login(page, host);
+  await page.goto(`${ctx.base}/trips/${webTrip.id}/money`, { waitUntil: 'networkidle' });
+  const emptyLine = await page.getByText('Nothing to settle yet').waitFor({ timeout: 15000 }).then(() => true, () => false);
+  record('A trip with no bills says there is nothing to settle and no bills yet', emptyLine && (await page.getByText('No bills yet.').count()) === 1);
+
+  await page.getByRole('button', { name: 'Add a bill' }).click();
+  const form = page.getByRole('form', { name: 'Add a bill' });
+  await form.getByRole('button', { name: 'Add the bill' }).click();
+  const formErrors = await form.locator('[aria-invalid="true"]').count();
+  record('Adding an empty bill: errors under "What it was for" and "Amount"', formErrors === 2, `${formErrors} fields marked`);
+  await form.getByLabel('What it was for').fill('Hotel, 2 nights');
+  await form.getByLabel('Amount (₹)').fill('8000');
+  const hint = await form.getByRole('group', { name: 'Shared by' }).innerText();
+  record('Equal split shows each share before saving (Rs 4,000 each for 2 people)', (hint.match(/₹4,000/g) || []).length === 2, hint.replace(/\s+/g, ' '));
+  await form.getByRole('button', { name: 'Add the bill' }).click();
+  const transfer = page.getByRole('list', { name: 'Who pays whom' });
+  const owes = await transfer.waitFor({ timeout: 15000 }).then(() => transfer.innerText(), () => '');
+  record('After the Rs 8,000 hotel: settle up says Dhruv pays you Rs 4,000', /Dhruv Grover\s*pays\s*you\s*₹4,000/.test(owes), owes.replace(/\s+/g, ' '));
+
+  await page.getByRole('button', { name: 'Add a bill' }).click();
+  const form2 = page.getByRole('form', { name: 'Add a bill' });
+  await form2.getByLabel('What it was for').fill('Volvo tickets');
+  await form2.getByLabel('Amount (₹)').fill('3000');
+  await form2.getByLabel('Category').selectOption('travel');
+  await form2.getByLabel('Paid by').selectOption(friend.uid);
+  await form2.getByText('Exact amounts').click();
+  await form2.getByLabel('Ashish Bisht').fill('1000');
+  await form2.getByLabel('Dhruv Grover').fill('1500');
+  await form2.getByRole('button', { name: 'Add the bill' }).click();
+  const splitError = await form2.getByText('Splits must add up to ₹3,000. They add up to ₹2,500.').count();
+  record('Exact shares that do not add up: refused under the shares, before sending', splitError === 1, `${splitError} messages`);
+  await form2.getByLabel('Dhruv Grover').fill('2000');
+  await form2.getByRole('button', { name: 'Add the bill' }).click();
+  await page.getByRole('list', { name: 'All bills and payments' }).getByText('Volvo tickets').waitFor({ timeout: 15000 }).catch(() => {});
+  const owes2 = (await transfer.innerText().catch(() => '')).replace(/\s+/g, ' ');
+  record('With Dhruv paying Rs 3,000 (you 1,000, him 2,000), settle up becomes Rs 3,000', /Dhruv Grover pays you ₹3,000/.test(owes2), owes2);
+
+  const chartBars = await page.locator('.recharts-surface rect[class*="bar"]').count();
+  const defaults = await page.locator('.recharts-tooltip-wrapper, .recharts-legend-wrapper, .recharts-cartesian-grid').count();
+  const fills = await page.locator('.recharts-surface rect[class*="bar"]').evaluateAll((els) => els.map((e) => getComputedStyle(e).fill));
+  record('The budget chart: one painted bar per category, in the stone colours, with no Recharts tooltip, legend or grid', chartBars === 2 && defaults === 0 && fills.includes('rgb(243, 193, 14)') && fills.includes('rgb(29, 122, 62)'), `${chartBars} bars, ${defaults} default parts, fills ${fills.join(' / ')}`);
+  const meter = await page.getByRole('meter', { name: 'Spent of the budget' }).getAttribute('aria-valuenow');
+  record('The budget strip shows Rs 11,000 spent of Rs 40,000', meter === '1100000' && (await page.getByText('₹29,000 left.').count()) >= 1, `meter ${meter}`);
+  if (ctx.saveLook) await ctx.shot(page, 'money');
+
+  await page.getByRole('button', { name: /^Mark as paid/ }).click();
+  const dialog = page.getByRole('dialog');
+  const question = await dialog.getByRole('heading').innerText().catch(() => '');
+  await dialog.getByRole('button', { name: 'Yes, mark as paid' }).click();
+  const square = await page.getByText('Everyone is square. Nobody owes anybody.').waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const paidRow = await page.getByRole('list', { name: 'All bills and payments' }).getByText('Dhruv Grover paid you').count();
+  record('"Mark as paid" asks first, then everyone is square and the payment is in the bills', /Dhruv Grover paid you ₹3,000\?/.test(question) && square && paidRow === 1, `"${question}", square ${square}, ${paidRow} rows`);
+  const meterAfter = await page.getByRole('meter', { name: 'Spent of the budget' }).getAttribute('aria-valuenow');
+  record('...and the budget still shows Rs 11,000 spent (a payment is not spending)', meterAfter === '1100000', `meter ${meterAfter}`);
+  record('No script errors on the money screen', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+  await context.close();
+
+  // The friend (an editor) can change only the bill he added
+  await call('POST', `/trips/${webTrip.id}/expenses`, { token: friend.token, body: { title: 'Momos on Mall Road', amount: 36000, category: 'food', paidBy: friend.uid, date: dayFromToday(5), split: { type: 'equal', among: [host.uid, friend.uid] } } });
+  const phone = await ctx.openPage(...ctx.PHONE);
+  await ctx.login(phone.page, friend);
+  await phone.page.goto(`${ctx.base}/trips/${webTrip.id}/money`, { waitUntil: 'networkidle' });
+  const ledger = phone.page.getByRole('list', { name: 'All bills and payments' });
+  await ledger.waitFor({ timeout: 15000 }).catch(() => {});
+  const editHotel = await phone.page.getByRole('button', { name: 'Edit Hotel, 2 nights' }).count();
+  const editVolvo = await phone.page.getByRole('button', { name: 'Edit Volvo tickets' }).count();
+  const editMomos = await phone.page.getByRole('button', { name: 'Edit Momos on Mall Road' }).count();
+  record('An editor sees Edit only on the bill he added (not on bills Ashish added, even one Dhruv paid)', editHotel === 0 && editVolvo === 0 && editMomos === 1, `hotel ${editHotel}, volvo ${editVolvo}, momos ${editMomos}`);
+  const extra = await ctx.overflowOf(phone.page);
+  record(`Phone width (${ctx.PHONE[0]}px), the money screen: no sideways scrolling`, extra <= 0, `${extra}px`);
+  if (ctx.saveLook) await ctx.shot(phone.page, 'money-phone');
+  await phone.context.close();
+}
 
 // Write routes that exist so far, each with a body that would be valid for an owner.
 // Later steps add their own routes to the viewer check in their sections.

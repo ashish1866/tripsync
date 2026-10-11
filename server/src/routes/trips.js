@@ -9,6 +9,8 @@ import { listTrips, createTrip, getTrip, updateTrip, deleteTrip } from '../contr
 import { addActivity, editActivity, deleteActivity } from '../controllers/activities.js';
 import { createInvite, listInvites, revokeInvite } from '../controllers/invites.js';
 import { changeRole, ownerOrSelf, removeMember } from '../controllers/members.js';
+import { addExpense, budget, deleteExpense, editExpense, listExpenses, markPaid, ownBillOrOwner, settlements } from '../controllers/expenses.js';
+import { expenseBody, expenseParams, settlementBody } from '../schemas/expense.js';
 import { weatherForTrip } from '../services/weather.js';
 
 // Mounted at /api/trips, behind requireAuth (see app.js).
@@ -41,5 +43,15 @@ router.get('/:id/invites', requireMember, owner, listInvites);
 router.delete('/:id/invites/:code', requireMember, owner, validateParams(inviteParams), revokeInvite);
 router.patch('/:id/members/:uid', requireMember, owner, validateParams(memberParams), validateBody(roleBody), changeRole);
 router.delete('/:id/members/:uid', requireMember, ownerOrSelf, validateParams(memberParams), removeMember);
+
+// Bills, budget and settle up. Editing or deleting a bill: the owner any, an
+// editor only their own (ownBillOrOwner is the role step for those two routes).
+router.get('/:id/expenses', requireMember, listExpenses);
+router.post('/:id/expenses', requireMember, planners, validateBody(expenseBody), addExpense);
+router.patch('/:id/expenses/:expenseId', requireMember, planners, ownBillOrOwner, validateParams(expenseParams), validateBody(expenseBody), editExpense);
+router.delete('/:id/expenses/:expenseId', requireMember, planners, ownBillOrOwner, validateParams(expenseParams), deleteExpense);
+router.get('/:id/budget', requireMember, budget);
+router.get('/:id/settlements', requireMember, settlements);
+router.post('/:id/settlements', requireMember, planners, validateBody(settlementBody), markPaid);
 
 export default router;
