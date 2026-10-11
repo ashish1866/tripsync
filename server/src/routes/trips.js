@@ -5,6 +5,7 @@ import { createTripBody, updateTripBody } from '../schemas/trip.js';
 import { activityParams, dayParams, editActivityBody, newActivityBody } from '../schemas/activity.js';
 import { listTrips, createTrip, getTrip, updateTrip, deleteTrip } from '../controllers/trips.js';
 import { addActivity, editActivity, deleteActivity } from '../controllers/activities.js';
+import { weatherForTrip } from '../services/weather.js';
 
 // Mounted at /api/trips, behind requireAuth (see app.js).
 // Every route with :id runs the guard chain in this order:
@@ -23,5 +24,10 @@ router.delete('/:id', requireMember, requireRole('owner'), deleteTrip);
 router.post('/:id/days/:day/activities', requireMember, planners, validateParams(dayParams), validateBody(newActivityBody), addActivity);
 router.patch('/:id/activities/:actId', requireMember, planners, validateParams(activityParams), validateBody(editActivityBody), editActivity);
 router.delete('/:id/activities/:actId', requireMember, planners, validateParams(activityParams), deleteActivity);
+
+// Weather for each day (any member). requireMember already loaded the destination and dates.
+router.get('/:id/weather', requireMember, async (req, res) => {
+  res.json({ weather: await weatherForTrip(req.trip) });
+});
 
 export default router;

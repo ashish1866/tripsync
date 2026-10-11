@@ -135,6 +135,20 @@ Data choices:
 - Moving a stop to another day is one update computed inside MongoDB (take it out of every day, add it to the end of the new day), so other stops added meanwhile are kept.
 - At most 30 stops per day (409 with the reason). The stop search looks within 60 km of the destination, nearest first, through our API, so the Geoapify key never reaches the browser.
 
+## Weather (Step 4)
+
+- **On each day stone:** under the stop count, a small ink weather symbol with the high and low ("17° / 6°"), then "Rain 35%". That is the kilometre stone idea from section 2 made real: the day's number, date and forecast on one painted face.
+- **Symbols** are drawn for TripSync as small inline SVG pictograms in 2px ink, like the symbols on a road sign: sun, sun behind a cloud, cloud, fog lines, cloud with rain strokes, cloud with snow dots, cloud with a bolt. Clouds are painted stone with an ink edge. No emoji, no icon font. A weather code we have no name for gets no symbol and the words "No description for this forecast": we never guess.
+- **Rain warning:** the stone's rain line turns road-sign red with the warning triangle, and the weather box and the day plan show a red warning board ("Rain likely on Day 2: 85% chance of rain, with 1 stop planned. Carry rain gear or plan a covered stop."). Red appears only when there is something to decide. On the selected (yellow) stone, red text would fail AA contrast, so the words stay ink and only the triangle is red.
+- **Weather box** (overview side column): the warnings, or one line saying there are none and what would cause one; "Forecast later" days named in words; and the source line "Forecast from Open-Meteo, checked at 9:44 pm. It is checked again after 3 hours." Its loading state is the road loader ("Checking the forecast"); its error state is a warning board with "Try the forecast again". If it fails, nothing else on the page changes.
+- **Beyond the forecast:** stones say "Forecast later", and the box says when it will appear ("It reaches about 16 days ahead, so Day 1 gets its forecast from about 28 Oct"). Days already over show nothing.
+- Row of day stones: every stone is now as tall as the tallest, so weather lines never make the row ragged.
+
+Data choices:
+- Cache key: the destination rounded to 2 decimals, written "lat,lng" ("32.26,77.17"), so trips to the same town share one entry. The 3-hour age is checked in code as well as by the TTL index (which only runs about once a minute).
+- A trip that starts beyond the 16-day forecast, or has ended, does not call Open-Meteo at all.
+- The API sends the rain limit (60%) with the forecast, so the rule lives in one tested server file (`server/src/utils/weather.js`) and the browser only applies it to the live stop counts.
+
 ## Data choices made in Step 2
 
 - Trip dates are stored as `YYYY-MM-DD` text, not timestamps. A trip date is a day on the calendar; text cannot shift to the day before on a server in another time zone.
@@ -145,6 +159,8 @@ Data choices:
 - A stranger gets 403 on a trip that exists and 404 on one that does not.
 
 ## Change log
+
+- 2026-10-11, Step 4: forecast on each day stone, painted weather symbols (`WeatherMark`), red rain warning line and boards, weather box on the overview with its own loading and error states, forecast line on the day plan. Day stones in a row now share one height.
 
 - 2026-10-11, Step 3: Day plan tab with selectable day stones, stop list with stone numbers, add/edit/remove forms, stop pins (numbered on the chosen day, pale on others, day numbers on the overview). New shared `SelectField`, `StopNumber`, `StopForm`; TextField gained a multi-line mode for notes.
 

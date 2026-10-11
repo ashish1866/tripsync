@@ -22,7 +22,7 @@ Create, list, edit, delete. Destination search through `/api/geo/destinations` (
 Activities per day (title, time, notes, place via Geoapify autocomplete `/api/geo/spots`). Pins for the destination and every activity. Single-item updates only.
 - Done when: Day 2 shows Solang Valley with a pin; editing one activity never overwrites another member's edit; a viewer adding an activity gets 403.
 
-## - [ ] Step 4: Weather
+## - [x] Step 4: Weather
 Open-Meteo forecast through the 3-hour `weatherCache` (location rounded to 2 decimals). Forecast on each day stone. Rain warning when rain chance is above 60% on a day with activities. Beyond the forecast range, the "closer to your trip" message.
 - Done when: forecast shows; a second visit does not call Open-Meteo (proved by a log or counter); the weather box failing does not break the rest of the page.
 

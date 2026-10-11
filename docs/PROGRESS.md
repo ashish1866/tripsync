@@ -5,7 +5,13 @@ Kiro adds one short block per finished step, newest at the top. A fresh session 
 ## Blocked
 (nothing)
 
-## Step 3: Itinerary and map (done, not pushed)
+## Step 4: Weather (done, not pushed)
+- Works: `GET /api/trips/:id/weather` (members only) gives each trip day a forecast from Open-Meteo through the 3-hour `weatherCache` (key "32.26,77.17" for Manali). Day stones show symbol, high/low and rain chance; the overview has a weather box; the day plan says the day's forecast in words. Rain warning (red) on a day with stops above 60%. Days beyond the 16-day forecast say "Forecast later" and the box says when it will appear.
+- Tested: `npm.cmd test` 20/20 (new: weather on days, codes, rain rule). `npm.cmd run check` 178/178: first visit `source: open-meteo`, second `source: cache` with the same check time and one cache document; another group's Manali trip shares it; an entry over 3 hours old is refreshed; a trip 40 days out never calls Open-Meteo; stranger 403, no token 401. In the browser: real forecast on every stone; planted forecast shows the warning only on Day 2 (not Day 1 at exactly 60%, not Day 3 without stops); a failing weather call shows an error only in the weather box, with the trip, stones and map still working, and "Try the forecast again" recovers. The dev server log shows "asked Open-Meteo" once, then "from the cache".
+- Not verified: Open-Meteo actually being down (the failure was simulated in the browser, not on the server). Forecast accuracy is Open-Meteo's.
+- Next: Step 5 in `docs/TASKS.md`.
+
+## Step 3: Itinerary and map (done, commit bf9c5ce, not pushed)
 - Works: trip page has a "Day plan" tab (`/trips/:id/plan?day=2`). Owners and editors add stops (name, time, notes, place from `/api/geo/spots`, Geoapify within 60 km of the destination), edit them field by field, move them to another day and remove them. Pins: the "0" destination stone plus a stone per stop with a place, on the day plan and the overview. Viewers see the plan with no way to change it.
 - Tested: `npm.cmd test` 15/15. `npm.cmd run check` 160/160, including: "Solang Valley" found and added to Day 2 with a pin (API and browser); a viewer adding, editing or removing a stop gets 403; a stranger 403; two members editing different fields of one stop at the same moment, and two different stops, keep both edits; 6 bad stop bodies 400; time order; moving to Day 3 keeps the notes; phone width with no sideways scroll.
 - Not verified: two members changing the SAME field at the same moment (the later save wins; there is no warning). Geoapify's free-plan daily limit was not reached or measured.

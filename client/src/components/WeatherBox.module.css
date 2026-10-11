@@ -1,0 +1,29 @@
+.box {
+  min-width: 0;
+}
+
+.heading {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-3);
+}
+
+.body,
+.problem {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.body > * {
+  width: 100%;
+}
+
+.line {
+  margin: 0;
+}
+
+.source {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}

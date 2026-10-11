@@ -1,5 +1,6 @@
 /* The row scrolls sideways on narrow screens; the next stone peeks in. */
 .road {
+  position: relative; /* keeps screen-reader-only text (absolutely placed) inside the scrolling row */
   display: flex;
   gap: var(--space-4);
   margin: 0;
@@ -9,15 +10,18 @@
   scroll-snap-type: x proximity;
 }
 
+/* Every stone in the row is as tall as the tallest (some carry more weather lines) */
 .stop {
   flex: none;
+  display: flex;
   scroll-snap-align: start;
 }
 
 /* The kerb: each stop draws its piece of the line, reaching across the gap */
 .post {
+  flex: 1;
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   border-bottom: 3px solid var(--ink);
   margin-right: calc(-1 * var(--space-4));
   padding-right: var(--space-4);
@@ -63,6 +67,7 @@
 
 .selected > span:last-child {
   background: var(--cap);
+  --warn-text: var(--ink);
 }
 
 .selected:hover {

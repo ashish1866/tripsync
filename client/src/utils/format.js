@@ -82,6 +82,12 @@ export function formatTime(hhmm) {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
+// A moment (ISO timestamp) as the clock time on this device: "2:05 pm"
+const clock = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+export function formatClock(timestamp) {
+  return clock.format(new Date(timestamp)).replace(/\s?([ap])\.?m\.?$/i, (_, x) => ` ${x.toLowerCase()}m`);
+}
+
 // "1 stop", "3 stops"
 export function plural(count, one, many = `${one}s`) {
   return `${count} ${count === 1 ? one : many}`;

@@ -31,7 +31,120 @@ export async function addMember(ctx, tripId, user, role) {
   await ctx.db.collection('trips').updateOne({ _id: new ObjectId(tripId) }, { $push: { members: { uid: user.uid, role, joinedAt: new Date() } } });
 }
 
-const sections = [tripsChecks, itineraryChecks];
+const sections = [tripsChecks, itineraryChecks, weatherChecks];
+
+// ====================== Step 4: weather ======================
+async function weatherChecks(ctx) {
+  const { call, record, hasError, db } = ctx;
+  ctx.setSection('Weather API');
+  const KEY = '32.26,77.17'; // Manali rounded to 2 decimals, "lat,lng"
+  const cache = db.collection('weatherCache');
+
+  const owner = await ctx.newUser('wxowner', 'Ashish Weather');
+  const friend = await ctx.newUser('wxfriend', 'Dhruv Weather');
+  const stranger = await ctx.newUser('wxstranger', 'Ankit Weather');
+  const trip = await makeTrip(ctx, owner, { start: 3, days: 4 });
+
+  await cache.deleteMany({ key: KEY });
+  const first = await call('GET', `/trips/${trip.id}/weather`, { token: owner.token });
+  const w1 = first.data?.weather;
+  const allForecast = w1?.days?.length === 4 && w1.days.every((d) => d.status === 'forecast' && typeof d.label === 'string' && 'rainChance' in d);
+  record('First visit asks Open-Meteo and gives a forecast for all 4 days', first.status === 200 && w1?.source === 'open-meteo' && allForecast, `HTTP ${first.status} ${first.data?.error ?? `source ${w1?.source}, ${w1?.days?.map((d) => d.status).join(',')}`}`);
+  record('Temperatures are whole numbers from the forecast', w1?.days?.every((d) => Number.isInteger(d.max) && Number.isInteger(d.min) && d.max >= d.min), JSON.stringify(w1?.days?.map((d) => [d.max, d.min])));
+  const doc = await cache.findOne({ key: KEY });
+  record(`The forecast is stored in weatherCache under "${KEY}"`, doc && Array.isArray(doc.data?.daily?.time) && doc.createdAt instanceof Date, doc ? `${doc.data?.daily?.time?.length} days stored` : 'no document');
+
+  const second = await call('GET', `/trips/${trip.id}/weather`, { token: owner.token });
+  const docAfter = await cache.findOne({ key: KEY });
+  record(
+    'Second visit uses the cache: no Open-Meteo call, same check time, one cache entry',
+    second.data?.weather?.source === 'cache' && second.data.weather.fetchedAt === w1?.fetchedAt && docAfter?.createdAt?.getTime() === doc?.createdAt?.getTime() && (await cache.countDocuments({ key: KEY })) === 1,
+    `source ${second.data?.weather?.source}, fetchedAt ${second.data?.weather?.fetchedAt} vs ${w1?.fetchedAt}`,
+  );
+
+  const friendTrip = await makeTrip(ctx, friend, { name: 'Manali with cousins', start: 4, days: 2 });
+  const shared = await call('GET', `/trips/${friendTrip.id}/weather`, { token: friend.token });
+  record("Another group's trip to the same town shares the cached forecast", shared.data?.weather?.source === 'cache' && shared.data.weather.place === KEY, `source ${shared.data?.weather?.source}, place ${shared.data?.weather?.place}`);
+
+  // An old entry (over 3 hours) is not used, even before MongoDB's TTL clean-up removes it
+  await cache.updateOne({ key: KEY }, { $set: { createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000 - 60_000) } });
+  const stale = await call('GET', `/trips/${trip.id}/weather`, { token: owner.token });
+  record('An entry older than 3 hours is refreshed from Open-Meteo (age checked in code)', stale.data?.weather?.source === 'open-meteo', `source ${stale.data?.weather?.source}`);
+
+  const far = await makeTrip(ctx, owner, { name: 'Manali in winter', start: 40, days: 3 });
+  const farW = await call('GET', `/trips/${far.id}/weather`, { token: owner.token });
+  record('A trip 40 days away: every day "later", and Open-Meteo is not asked', farW.status === 200 && farW.data.weather.source === 'none' && farW.data.weather.days.every((d) => d.status === 'later' && !('max' in d)), `source ${farW.data?.weather?.source}, ${farW.data?.weather?.days?.map((d) => d.status).join(',')}`);
+  const edge = await makeTrip(ctx, owner, { name: 'Manali at the edge', start: 13, days: 6 });
+  const edgeW = await call('GET', `/trips/${edge.id}/weather`, { token: owner.token });
+  const edgeStatus = edgeW.data?.weather?.days?.map((d) => d.status).join(',');
+  record('A trip at the edge of the 16 days: forecast for the first days, "later" after', edgeStatus === 'forecast,forecast,forecast,later,later,later', edgeStatus);
+
+  const strangerW = await call('GET', `/trips/${trip.id}/weather`, { token: stranger.token });
+  record('A stranger asking for the weather: 403', strangerW.status === 403 && hasError(strangerW), `HTTP ${strangerW.status}`);
+  const noToken = await call('GET', `/trips/${trip.id}/weather`);
+  record('Weather without logging in: 401', noToken.status === 401, `HTTP ${noToken.status}`);
+
+  // ---------- in the browser ----------
+  ctx.setSection('Weather in the browser');
+  const traveller = await ctx.newUser('wxweb', 'Ashish Bisht');
+  const webTrip = await makeTrip(ctx, traveller, { start: 3, days: 4 });
+  for (const day of [1, 2]) {
+    await call('POST', `/trips/${webTrip.id}/days/${day}/activities`, { token: traveller.token, body: { title: day === 1 ? 'Hadimba Devi Temple' : 'Solang Valley' } });
+  }
+  const { context, page, consoleErrors } = await ctx.openPage();
+  await ctx.login(page, traveller);
+  const tripUrl = `${ctx.base}/trips/${webTrip.id}`;
+
+  await page.goto(tripUrl, { waitUntil: 'networkidle' });
+  const sourceLine = await page.getByText(/Forecast from Open-Meteo, checked at/).waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const stoneText = (await page.getByRole('list', { name: 'Days of the trip' }).innerText()).replace(/\s+/g, ' ');
+  record('The overview shows the forecast on every day stone and says where it is from', sourceLine && (stoneText.match(/°/g) || []).length >= 8 && (stoneText.match(/Rain (\d+%|chance not given)/g) || []).length === 4, stoneText.slice(0, 200));
+  if (ctx.saveLook) await ctx.shot(page, 'weather-overview');
+
+  // Rain warning: the rule is checked with a planted forecast, since real rain cannot be ordered
+  const planted = (chances) => ({
+    weather: {
+      place: KEY,
+      source: 'cache',
+      fetchedAt: new Date().toISOString(),
+      timezone: 'Asia/Kolkata',
+      forecastDays: 16,
+      rainLimit: 60,
+      days: webTrip.days.map((d, i) => ({ dayNumber: d.dayNumber, date: d.date, status: 'forecast', max: 14, min: 4, rainChance: chances[i], code: 63, label: 'Rain', kind: 'rain' })),
+    },
+  });
+  await page.route('**/api/trips/*/weather', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(planted([60, 85, 90, 10])) }));
+  await page.reload({ waitUntil: 'networkidle' });
+  const warnings = await page.getByRole('alert').filter({ hasText: /Rain likely on Day/ }).allInnerTexts();
+  record('Rain warning only for the day with stops above 60% (Day 2, not Day 1 at 60% or Day 3 with no stops)', warnings.length === 1 && /Day 2/.test(warnings[0]), JSON.stringify(warnings));
+  const stoneWarn = await page.getByRole('list', { name: 'Days of the trip' }).getByText(/rain warning/).count();
+  record('The Day 2 stone carries the warning sign', stoneWarn === 1, `${stoneWarn} stones`);
+  await page.goto(`${tripUrl}/plan?day=2`, { waitUntil: 'networkidle' });
+  const planWarn = await page.getByRole('alert').filter({ hasText: 'Rain likely on Day 2' }).count();
+  const planLine = await page.getByText(/Rain, 14° to 4°C, 85% chance of rain/).count();
+  record('The day plan shows Day 2 forecast in words and its warning', planWarn === 1 && planLine === 1, `${planWarn} warning, ${planLine} line`);
+  if (ctx.saveLook) await ctx.shot(page, 'weather-warning');
+  await page.unroute('**/api/trips/*/weather');
+
+  // The weather failing breaks only the weather box
+  await page.route('**/api/trips/*/weather', (route) => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'The weather service is not answering right now. Try again in a minute.' }) }));
+  await page.goto(tripUrl, { waitUntil: 'networkidle' });
+  const boxError = await page.getByRole('alert').filter({ hasText: 'The forecast could not be loaded' }).count();
+  const stillThere = (await page.locator('h1').innerText()) === 'Manali Trip' && (await page.getByRole('list', { name: 'Days of the trip' }).getByRole('listitem').count()) === 4 && (await page.locator('.ts-pin-destination').count()) === 1;
+  record('Weather failing: only the weather box shows an error; name, day stones and map still work', boxError === 1 && stillThere, `${boxError} weather errors, rest ${stillThere ? 'fine' : 'broken'}`);
+  await page.unroute('**/api/trips/*/weather');
+  await page.getByRole('button', { name: 'Try the forecast again' }).click();
+  const recovered = await page.getByText(/Forecast from Open-Meteo, checked at/).waitFor({ timeout: 15000 }).then(() => true, () => false);
+  record('"Try the forecast again" brings the forecast back', recovered);
+
+  const farTrip = await makeTrip(ctx, traveller, { name: 'Manali in winter', start: 40, days: 3 });
+  await page.goto(`${ctx.base}/trips/${farTrip.id}`, { waitUntil: 'networkidle' });
+  const closer = await page.getByText(/The forecast appears closer to the trip/).waitFor({ timeout: 15000 }).then(() => true, () => false);
+  const laterStones = await page.getByRole('list', { name: 'Days of the trip' }).getByText('Forecast later').count();
+  record('A trip 40 days away says the forecast appears closer to the trip, and shows no weather', closer && laterStones === 3, `${laterStones} stones say "Forecast later"`);
+  record('No script errors on the weather screens', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+  await context.close();
+}
 
 // ====================== Step 3: itinerary and map ======================
 async function itineraryChecks(ctx) {
@@ -196,6 +309,7 @@ async function itineraryChecks(ctx) {
   const viewerForms = await phone.page.getByRole('form').count();
   const viewerButtons = await phone.page.getByRole('button', { name: /^(Edit|Remove) / }).count();
   const viewerLine = await phone.page.getByText('You can view this trip').isVisible().catch(() => false);
+  await phone.page.getByText(/Checking the forecast/).waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
   record('A viewer sees the stops with no add form and no Edit or Remove', viewerForms === 0 && viewerButtons === 0 && viewerLine, `${viewerForms} forms, ${viewerButtons} buttons`);
   const extra = await ctx.overflowOf(phone.page);
   record(`Phone width (${ctx.PHONE[0]}px), the day plan: no sideways scrolling`, extra <= 0, `${extra}px`);
@@ -403,6 +517,8 @@ async function tripsChecks(ctx) {
   await phone.page.getByRole('link', { name: /Manali Trip/ }).click();
   await phone.page.waitForURL(/\/trips\/[a-f0-9]{24}$/);
   await phone.page.waitForLoadState('networkidle');
+  // Measure once the forecast has filled the day stones (it loads after the trip).
+  await phone.page.getByText(/Forecast from Open-Meteo|forecast could not be loaded|appears closer/).first().waitFor({ timeout: 15000 }).catch(() => {});
   const extra = await ctx.overflowOf(phone.page);
   record('Phone width, the trip page: no sideways scrolling', extra <= 0, `${extra}px`);
   if (ctx.saveLook) await ctx.shot(phone.page, 'trip-phone');

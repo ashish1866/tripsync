@@ -1,6 +1,8 @@
 import { Link, useOutletContext } from 'react-router';
 import DayRoad from '../../components/DayRoad';
 import TripMap from '../../components/TripMap';
+import DayWeather from '../../components/DayWeather';
+import WeatherBox from '../../components/WeatherBox';
 import { formatRupees, placeLine, plural } from '../../utils/format';
 import { tripPins } from '../../utils/pins';
 import styles from './Overview.module.css';
@@ -9,7 +11,7 @@ const ROLE_LABEL = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
 
 // The trip's first screen: the route of day stones, the map, the money line and the group.
 export default function Overview() {
-  const { trip } = useOutletContext();
+  const { trip, weather, loadWeather } = useOutletContext();
   const stops = trip.days.reduce((n, d) => n + d.activities.length, 0);
   const pins = tripPins(trip);
 
@@ -19,7 +21,7 @@ export default function Overview() {
         <h2 id="route-title" className={styles.heading}>
           The route, {plural(trip.days.length, 'day')}
         </h2>
-        <DayRoad days={trip.days} />
+        <DayRoad days={trip.days} renderExtra={(day) => <DayWeather weather={weather} day={day} />} />
         <p className={styles.note}>
           <Link to="plan">Open the day plan</Link> to add or change stops.
         </p>
@@ -38,6 +40,7 @@ export default function Overview() {
       </section>
 
       <aside className={styles.side}>
+        <WeatherBox trip={trip} weather={weather} onRetry={loadWeather} />
         <section aria-labelledby="money-title">
           <h2 id="money-title" className={styles.heading}>
             Budget

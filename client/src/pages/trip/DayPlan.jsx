@@ -10,11 +10,45 @@ import Notice from '../../components/Notice';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { formatDate, formatTime, formatWeekday, plural } from '../../utils/format';
 import { tripPins } from '../../utils/pins';
+import { rainWarning, weatherOn } from '../../utils/weather';
+import DayWeather from '../../components/DayWeather';
+import WeatherMark from '../../components/WeatherMark';
 import styles from './DayPlan.module.css';
+
+// The chosen day's forecast in words, and its rain warning.
+function DayForecast({ weather, day }) {
+  if (weather.status === 'loading') return <p className={styles.forecast}>Checking the forecast for this day.</p>;
+  if (weather.status === 'error') return <p className={styles.forecast}>The forecast could not be loaded right now. The plan below works as usual.</p>;
+  const d = weatherOn(weather, day.date);
+  if (!d || d.status === 'past') return null;
+  if (d.status === 'later') return <p className={styles.forecast}>The forecast for this day appears closer to the trip.</p>;
+  const temps = d.max === null || d.min === null ? '' : `, ${d.max}° to ${d.min}°C`;
+  const rain = d.rainChance === null ? '' : `, ${d.rainChance}% chance of rain`;
+  const stops = day.activities.length;
+  return (
+    <>
+      <p className={styles.forecast}>
+        <WeatherMark kind={d.kind} />
+        <span>
+          {d.label}
+          {temps}
+          {rain}.
+        </span>
+      </p>
+      {rainWarning(d, stops, weather.data.rainLimit) && (
+        <Notice tone="warning" title={`Rain likely on Day ${day.dayNumber}`}>
+          <p>
+            {d.rainChance}% chance of rain, with {plural(stops, 'stop')} planned. Carry rain gear or plan a covered stop.
+          </p>
+        </Notice>
+      )}
+    </>
+  );
+}
 
 // /trips/:id/plan?day=2 : pick a day stone, see and change that day's stops beside the map.
 export default function DayPlan() {
-  const { trip, setTrip } = useOutletContext();
+  const { trip, setTrip, weather } = useOutletContext();
   const [params, setParams] = useSearchParams();
   const asked = Number(params.get('day'));
   const dayNumber = trip.days.some((d) => d.dayNumber === asked) ? asked : 1;
@@ -53,7 +87,7 @@ export default function DayPlan() {
         <h2 id="days-title" className={styles.heading}>
           Pick a day
         </h2>
-        <DayRoad days={trip.days} selected={dayNumber} onSelect={selectDay} />
+        <DayRoad days={trip.days} selected={dayNumber} onSelect={selectDay} renderExtra={(d) => <DayWeather weather={weather} day={d} />} />
       </section>
 
       <div className={styles.layout}>
@@ -62,6 +96,7 @@ export default function DayPlan() {
             Day {dayNumber}, {formatWeekday(day.date)} {formatDate(day.date)}
           </h2>
           <p className={styles.count}>{day.activities.length ? plural(day.activities.length, 'stop') : 'No stops yet.'}</p>
+          <DayForecast weather={weather} day={day} />
           {problem && <Notice tone="warning">{problem}</Notice>}
 
           {day.activities.length === 0 && (

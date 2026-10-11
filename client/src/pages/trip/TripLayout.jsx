@@ -40,6 +40,24 @@ export default function TripLayout() {
 
   const setTrip = useCallback((trip) => setState({ status: 'ready', trip }), []);
 
+  // The forecast is loaded once per trip (and again if its dates change), and
+  // shared by every tab. It has its own state, so if it fails only the weather
+  // parts of the page say so.
+  const [weather, setWeather] = useState({ status: 'loading' });
+  const datesKey = state.trip ? `${state.trip.id}|${state.trip.startDate}|${state.trip.endDate}` : null;
+  const loadWeather = useCallback(async () => {
+    setWeather({ status: 'loading' });
+    try {
+      const { data } = await api.get(`/trips/${id}/weather`);
+      setWeather({ status: 'ready', data: data.weather });
+    } catch (err) {
+      setWeather({ status: 'error', message: errorMessage(err) });
+    }
+  }, [id]);
+  useEffect(() => {
+    if (datesKey) loadWeather();
+  }, [datesKey, loadWeather]);
+
   if (state.status === 'loading') {
     return (
       <>
@@ -94,7 +112,7 @@ export default function TripLayout() {
         </nav>
       </div>
       <main className={styles.page}>
-        <Outlet context={{ trip, setTrip, reload }} />
+        <Outlet context={{ trip, setTrip, reload, weather, loadWeather }} />
       </main>
     </>
   );

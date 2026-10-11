@@ -1,0 +1,22 @@
+.mark {
+  flex: none;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Solid ink parts (the sun, snowflakes) */
+.fill {
+  fill: var(--ink);
+}
+
+/* A cloud is painted stone with an ink edge, so it covers the sun behind it */
+.paper {
+  fill: var(--stone);
+}
+
+.bolt {
+  stroke-width: 2.2;
+}
