@@ -49,7 +49,7 @@ describe('calling an outside service', () => {
     const limited = () => reply(429, { error: true, reason: 'Hourly API request limit exceeded. Please try again in the next hour.' });
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => limited()));
     await expect(fetchJson('https://example.test/a', { ...fast, showReason: true })).rejects.toMatchObject({
-      message: 'The weather service could not answer this time (it replied HTTP 429: Hourly API request limit exceeded. Please try again in the next hour.). Try again in a minute.',
+      message: 'The weather service could not answer this time. It replied HTTP 429: Hourly API request limit exceeded. Please try again in the next hour.',
     });
     // Off by default, so a service like Geoapify can never put its text in front of a user.
     await expect(fetchJson('https://example.test/a', fast)).rejects.toMatchObject({

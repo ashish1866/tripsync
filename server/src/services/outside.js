@@ -51,8 +51,9 @@ export async function fetchJson(url, { service, timeoutMs = 8000, retries = 1, r
   }
 
   if (failure.kind === 'status') {
-    const said = failure.said ? `: ${failure.said}` : '';
-    throw new HttpError(503, `${service} could not answer this time (it replied HTTP ${failure.status}${said}). Try again in a minute.`);
+    // When the service explains itself ("...try again tomorrow"), its advice replaces ours.
+    if (failure.said) throw new HttpError(503, `${service} could not answer this time. It replied HTTP ${failure.status}: ${failure.said}`);
+    throw new HttpError(503, `${service} could not answer this time (it replied HTTP ${failure.status}). Try again in a minute.`);
   }
   throw new HttpError(503, `${service} is not answering right now. Try again in a minute.`);
 }

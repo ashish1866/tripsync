@@ -57,10 +57,10 @@ async function forwardToApi(request, url, env) {
       redirect: 'manual',
     });
     if (res.status < 500) return res;
-    // An error the API chose to send, for example "The weather service could not answer"
-    // (502). Cloudflare swaps its own HTML error page in for a 5xx that is passed on as it
-    // came, so the API's JSON message would never reach the website. Building a fresh
-    // response with the same status and body keeps it.
+    // An error the API chose to send, for example 503 "The weather service could not answer".
+    // Measured on the live site (2026-10-12): an API answer of 502 reached the browser as
+    // Cloudflare's own HTML "Bad gateway" page, so the API now answers 503 for a failing outside
+    // service. The answer is rebuilt as a fresh response so its JSON body and status are kept as they are.
     const kept = new Headers(res.headers);
     kept.delete('content-encoding');
     kept.delete('content-length');
