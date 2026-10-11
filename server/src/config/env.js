@@ -11,12 +11,14 @@ const envSchema = z.object({
   MONGODB_DB: z.string().min(1).default('tripsync_dev'),
   FIREBASE_PROJECT_ID: z.string('FIREBASE_PROJECT_ID is not set').min(1, 'FIREBASE_PROJECT_ID is empty'),
   GEOAPIFY_KEY: z.string().default(''),
-  // OpenWeather (openweathermap.org) is the backup forecast, used when Open-Meteo refuses.
-  // Optional: without a key, only Open-Meteo is used.
-  OPENWEATHER_KEY: z.string().default(''),
-  // auto = Open-Meteo first, OpenWeather if it fails (the normal setting);
-  // openweather / open-meteo = use only that one (for testing).
-  WEATHER_PROVIDER: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['auto', 'open-meteo', 'openweather']).default('auto')),
+  // Backup forecasts, used only when Open-Meteo refuses. Both optional: an empty key turns that backup off.
+  //   Visual Crossing (visualcrossing.com): 15 days, tried first.
+  //   OpenWeather (openweathermap.org): 5 days, tried second.
+  VISUALCROSSING_KEY: z.string().trim().default(''),
+  OPENWEATHER_KEY: z.string().trim().default(''),
+  // auto = Open-Meteo first, then the backups (the normal setting);
+  // open-meteo / visualcrossing / openweather = use only that one (for testing).
+  WEATHER_PROVIDER: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['auto', 'open-meteo', 'visualcrossing', 'openweather']).default('auto')),
 });
 
 let cached = null;

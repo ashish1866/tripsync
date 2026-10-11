@@ -19,6 +19,9 @@ export default function WeatherBox({ trip, weather, onRetry }) {
   );
 }
 
+// Backup forecasts, by the name the API gives them, as they are named on screen.
+const BACKUPS = { visualcrossing: 'Visual Crossing', openweather: 'OpenWeather' };
+
 // Day numbers as words: "Day 3", "Days 3 to 6", "Days 1, 3 and 4"
 function dayList(numbers) {
   if (numbers.length === 1) return `Day ${numbers[0]}`;
@@ -80,14 +83,23 @@ function Body({ trip, weather, onRetry }) {
 
       {allPast && <p className={styles.line}>This trip is over, so there is no forecast to show.</p>}
 
-      {source !== 'none' && fetchedAt && provider === 'openweather' && (
+      {source !== 'none' && fetchedAt && BACKUPS[provider] && (
         <p className={styles.source}>
           {fellBack
-            ? `Forecast from OpenWeather, because Open-Meteo did not answer. It reaches about ${forecastDays} days ahead, so later days show once Open-Meteo is back. Checked at ${formatClock(fetchedAt)}; TripSync asks Open-Meteo again in 15 minutes.`
-            : `Forecast from OpenWeather, checked at ${formatClock(fetchedAt)}. It reaches about ${forecastDays} days ahead and is checked again after 3 hours.`}
+            ? `Forecast from ${BACKUPS[provider]}, because Open-Meteo did not answer. It reaches about ${forecastDays} days ahead. Checked at ${formatClock(fetchedAt)}; TripSync asks Open-Meteo again in 15 minutes.`
+            : `Forecast from ${BACKUPS[provider]}, checked at ${formatClock(fetchedAt)}. It reaches about ${forecastDays} days ahead.`}
+          {provider === 'visualcrossing' && (
+            <>
+              {' '}
+              {/* Visual Crossing's free plan asks for this credit next to its data. */}
+              <a href="https://www.visualcrossing.com/" target="_blank" rel="noopener noreferrer">
+                Powered by Visual Crossing Weather
+              </a>
+            </>
+          )}
         </p>
       )}
-      {source !== 'none' && fetchedAt && provider !== 'openweather' && (
+      {source !== 'none' && fetchedAt && !BACKUPS[provider] && (
         <p className={styles.source}>
           Forecast from Open-Meteo, checked at {formatClock(fetchedAt)}. It is checked again after 3 hours.
         </p>

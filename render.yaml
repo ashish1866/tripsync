@@ -26,5 +26,7 @@ services:
         sync: false # secret: typed into Render's dashboard
       - key: GEOAPIFY_KEY
         sync: false # secret: not used until the Explore step, but asked for now (see the guide)
+      - key: VISUALCROSSING_KEY
+        sync: false # secret, optional: first backup forecast (15 days) when Open-Meteo refuses. Set on Render's Environment page.
       - key: OPENWEATHER_KEY
-        sync: false # secret, optional: the backup forecast when Open-Meteo refuses. Empty = no backup. Set on Render's Environment page.
+        sync: false # secret, optional: second backup forecast (5 days). Empty = not used.

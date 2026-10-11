@@ -2,11 +2,13 @@
 # .dev.vars is git-ignored. Never commit real values.
 MONGODB_URI=
 GEOAPIFY_KEY=
-# Optional backup forecast (openweathermap.org, free key). Used when Open-Meteo refuses. Leave empty to turn it off.
+# Optional backup forecasts, used only when Open-Meteo refuses. Leave a key empty to turn that backup off.
+# Visual Crossing (visualcrossing.com, 15 days) is tried first, OpenWeather (openweathermap.org, 5 days) second.
+VISUALCROSSING_KEY=
 OPENWEATHER_KEY=
 
-# Which forecast to ask: auto (Open-Meteo, then OpenWeather if it fails), open-meteo, or openweather (to test the backup).
-# Leave empty for auto.
+# Which forecast to ask: auto (Open-Meteo, then the backups), or one of open-meteo, visualcrossing,
+# openweather (to test one on purpose). Leave empty for auto.
 WEATHER_PROVIDER=
 
 # Not secret, but the API needs them.
