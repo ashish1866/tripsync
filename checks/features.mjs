@@ -679,6 +679,8 @@ async function moneyChecks(ctx) {
   const question = await dialog.getByRole('heading').innerText().catch(() => '');
   await dialog.getByRole('button', { name: 'Yes, mark as paid' }).click();
   const square = await page.getByText('Everyone is square. Nobody owes anybody.').waitFor({ timeout: 15000 }).then(() => true, () => false);
+  // The bills list loads separately from settle up, so its new row can arrive a moment later.
+  await page.getByRole('list', { name: 'All bills and payments' }).getByText('Dhruv Grover paid you').waitFor({ timeout: 15000 }).catch(() => {});
   const paidRow = await page.getByRole('list', { name: 'All bills and payments' }).getByText('Dhruv Grover paid you').count();
   record('"Mark as paid" asks first, then everyone is square and the payment is in the bills', /Dhruv Grover paid you ₹3,000\?/.test(question) && square && paidRow === 1, `"${question}", square ${square}, ${paidRow} rows`);
   const meterAfter = await page.getByRole('meter', { name: 'Spent of the budget' }).getAttribute('aria-valuenow');
