@@ -29,6 +29,7 @@ import { generateKeyPair, SignJWT } from 'jose';
 import { MongoClient } from 'mongodb';
 import { chromium } from 'playwright-core';
 import { runSlopGuard, describeHits } from './slopGuard.mjs';
+import { runFeatureChecks } from './features.mjs';
 
 const LIVE_URL = 'https://tripsync.ashishbisht.workers.dev';
 const args = process.argv.slice(2);
@@ -106,7 +107,7 @@ async function removeAccount(account) {
     if (/^(INVALID_LOGIN_CREDENTIALS|EMAIL_NOT_FOUND)/.test(code)) return 'absent';
     throw new Error(`could not log in to delete it (${code})`);
   }
-  await users().deleteMany({ firebaseUid: before.data.localId });
+  await removeUserData(before.data.localId);
   await firebase('delete', { idToken: before.data.idToken });
   const after = await signIn(account);
   if (after.ok) throw new Error('it still logs in after accounts:delete');
@@ -146,12 +147,53 @@ async function call(method, route, { token, body, rawBody, headers = {} } = {}) 
 const hasError = (r) => typeof r.data?.error === 'string' && r.data.error.length > 0;
 
 const mongo = new MongoClient(serverEnv.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
-const users = () => mongo.db(serverEnv.MONGODB_DB || 'tripsync_dev').collection('users');
+const mongoDb = () => mongo.db(serverEnv.MONGODB_DB || 'tripsync_dev');
+const users = () => mongoDb().collection('users');
+
+// Everything a throwaway account left in MongoDB: its profile, the trips it
+// owns (with their expenses and invites), and its place in other trips.
+async function removeUserData(uid) {
+  const db = mongoDb();
+  const owned = await db.collection('trips').find({ owner: uid }, { projection: { _id: 1 } }).toArray();
+  const ids = owned.map((t) => t._id);
+  if (ids.length) {
+    await db.collection('expenses').deleteMany({ tripId: { $in: ids } });
+    await db.collection('invites').deleteMany({ tripId: { $in: ids } });
+    await db.collection('trips').deleteMany({ _id: { $in: ids } });
+  }
+  await db.collection('trips').updateMany({ 'members.uid': uid }, { $pull: { members: { uid } } });
+  await db.collection('expenses').deleteMany({ createdBy: uid });
+  await users().deleteMany({ firebaseUid: uid });
+}
+
+// A throwaway account with a TripSync profile: { uid, token, email, password, name }.
+async function newUser(tag, name) {
+  const account = newAccount(tag);
+  const signUp = await firebase('signUp', { email: account.email, password: account.password, returnSecureToken: true });
+  const profile = await call('POST', '/users/me', { token: signUp.idToken, body: { name } });
+  if (profile.status !== 201) throw new Error(`profile for ${tag}: HTTP ${profile.status}`);
+  return { ...account, uid: signUp.localId, token: signUp.idToken, name };
+}
+
+// Logs a test account in through the real log-in form, then waits for /trips.
+async function login(page, account) {
+  await page.goto(base + '/login', { waitUntil: 'networkidle' });
+  await page.getByLabel('Email').fill(account.email);
+  await page.getByLabel('Password', { exact: true }).fill(account.password);
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.waitForURL(`${base}/trips`, { timeout: 25000 });
+  await page.waitForLoadState('networkidle');
+}
 
 const browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch({ channel: 'msedge' }));
 
-async function openPage(width = 1366, height = 800) {
-  const context = await browser.newContext({ viewport: { width, height } });
+// Screenshot rule (.kiro/steering/tech.md): viewports at most 1280 x 1600,
+// phone checks at 390 px wide, and never a full-page capture.
+const LAPTOP = [1280, 800];
+const PHONE = [390, 844];
+
+async function openPage(width = LAPTOP[0], height = LAPTOP[1], options = {}) {
+  const context = await browser.newContext({ viewport: { width, height }, ...options });
   const page = await context.newPage();
   const consoleErrors = [];
   // HTTP errors we cause on purpose (401, 404, wrong password) also log "Failed to load resource";
@@ -162,7 +204,8 @@ async function openPage(width = 1366, height = 800) {
 }
 
 async function shot(page, name) {
-  await page.screenshot({ path: path.join(artifacts, `${name}.png`), fullPage: true });
+  // Only what is in the viewport (never fullPage), so a long page cannot make a huge image.
+  await page.screenshot({ path: path.join(artifacts, `${name}.png`), fullPage: false });
 }
 
 async function overflowOf(page) {
@@ -383,8 +426,12 @@ try {
     const doc = await users().findOne({ email: account.email });
     record('Sign-up created the MongoDB profile with the typed name', doc?.name === name && typeof doc.firebaseUid === 'string', doc ? `name "${doc.name}"` : 'no document');
 
-    const empty = reachedTrips ? await page.getByRole('heading', { name: 'No trips yet' }).count() : 0;
-    record('/trips shows the designed empty state', empty === 1, `${empty} heading(s)`);
+    // The list loads after the login check, so wait for it instead of reading at once.
+    const empty = reachedTrips
+      ? await page.getByRole('heading', { name: 'No trips yet' }).waitFor({ timeout: 15000 }).then(() => 1, () => 0)
+      : 0;
+    const mainText = empty ? '' : (await page.locator('main').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+    record('/trips shows the designed empty state', empty === 1, `no "No trips yet" heading; page says: ${mainText}`);
     if (saveLook) await shot(page, 'trips-laptop');
 
     await page.reload({ waitUntil: 'networkidle' });
@@ -431,11 +478,11 @@ try {
 
     // Phone width, logged in and out
     await context.close();
-    const phone = await openPage(375, 740);
+    const phone = await openPage(...PHONE);
     for (const route of ['/', '/login', '/register', '/status', '/no/such/road']) {
       await phone.page.goto(base + route, { waitUntil: 'networkidle' });
       const extra = await overflowOf(phone.page);
-      record(`Phone width (375px), ${route}: no sideways scrolling`, extra <= 0, `${extra}px too wide`);
+      record(`Phone width (${PHONE[0]}px), ${route}: no sideways scrolling`, extra <= 0, `${extra}px too wide`);
       if (extra > 0) await shot(phone.page, `FAILED-phone${route.replace(/\//g, '_')}`);
       if (saveLook && route === '/') await shot(phone.page, 'landing-phone');
     }
@@ -445,10 +492,29 @@ try {
     await phone.page.getByRole('button', { name: 'Log in' }).click();
     await phone.page.waitForURL(`${base}/trips`, { timeout: 20000 }).catch(() => {});
     const extra = await overflowOf(phone.page);
-    record('Phone width (375px), /trips logged in: no sideways scrolling', phone.page.url() === `${base}/trips` && extra <= 0, `${phone.page.url()} ${extra}px`);
+    record(`Phone width (${PHONE[0]}px), /trips logged in: no sideways scrolling`, phone.page.url() === `${base}/trips` && extra <= 0, `${phone.page.url()} ${extra}px`);
     if (saveLook) await shot(phone.page, 'trips-phone');
     await phone.context.close();
   }
+
+  // ====================== 6. Features (Steps 2 onward, see features.mjs) ======================
+  await runFeatureChecks({
+    base,
+    call,
+    record,
+    setSection: (name) => {
+      section = name;
+    },
+    newUser,
+    login,
+    db: mongoDb(),
+    openPage,
+    PHONE,
+    shot,
+    saveLook,
+    overflowOf,
+    hasError,
+  });
 } catch (err) {
   record('The check itself ran to the end', false, err.stack?.split('\n').slice(0, 2).join(' ') ?? String(err));
 } finally {

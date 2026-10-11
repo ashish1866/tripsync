@@ -3,6 +3,8 @@ import { requireAuth } from './middleware/requireAuth.js';
 import { notFound, errorHandler } from './middleware/errors.js';
 import healthRoutes from './routes/health.js';
 import userRoutes from './routes/users.js';
+import tripRoutes from './routes/trips.js';
+import geoRoutes from './routes/geo.js';
 
 // Builds the Express app (the TripSync API).
 // server.js starts it: on Render in production, on this PC for `npm run dev`.
@@ -24,6 +26,8 @@ export function createApp() {
 
   // Everything below needs a valid Firebase login (guard chain, step 1: token check).
   app.use('/api/users', requireAuth, userRoutes);
+  app.use('/api/trips', requireAuth, tripRoutes);
+  app.use('/api/geo', requireAuth, geoRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

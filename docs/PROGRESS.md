@@ -5,7 +5,14 @@ Kiro adds one short block per finished step, newest at the top. A fresh session 
 ## Blocked
 (nothing)
 
-## Step 1.6: Slop guard (done)
+## Step 2: Trips (done, not pushed)
+- Works: My Trips lists every trip you are in (stone with destination and days, dates, people, your role, budget strip). "Plan a new trip" searches destinations through `/api/geo/destinations` (Open-Meteo), shows the pick as a stone pin on a grey OSM map, and creates one day per date. The trip page shows the route of day stones, the map and the group. Owner-only settings edit name, dates and budget, and delete the trip (with its expenses and invites) after a TripSync dialog. Shortening past a day with stops is refused with 409 and the day named.
+- Tested: `npm.cmd test` 15/15. `npm.cmd run check` 119/119: stranger reads 403, non-owner edit/delete 403, 11 bad create bodies and 5 bad edits 400, dates longer/shorter keep stops, "Manali Trip" on My Trips with "Manali, Himachal Pradesh", stone pin and "© OpenStreetMap contributors", no default pins, phone width with no sideways scroll, `/status` mark stands still with reduced motion. Client build passes.
+- Fixed while finishing: the check now uses 1280 px laptop and 390 px phone viewports and never full-page screenshots (new Screenshots rule), and waits for the trips list and map tiles instead of reading too early.
+- Not verified: the 409 "changed at the same moment" path (a date change racing another edit) is in code but not forced by a test. The JS bundle is 614 kB (Vite warns above 500 kB); splitting it is not part of this step.
+- Next: Step 3 in `docs/TASKS.md`.
+
+## Step 1.6: Slop guard (done, commit b3ecae6, not pushed)
 - Works: `npm.cmd run check` starts with a "Slop guard" section (`checks/slopGuard.mjs`, also runs alone with `node checks/slopGuard.mjs`). It scans 42 files in `client/src` and `client/index.html`. Copy phrases are found with a JS parser (acorn + acorn-jsx, pinned root dev dependencies), so only visible text counts.
 - Fixed hits: 2 striped fills became the shared `RoadDashes` component, and 4 non-focus `box-shadow`s became outlines. 0 slop-ok exceptions.
 - Tested: guard passes on current code. With planted files it failed on every rule (colour, gradient, blur, shadow, JS boxShadow, fonts, alert, TODO, emoji, five copy phrases, an unlogged slop-ok). It did not trip on `onSubmit`, `type="submit"`, a comment saying "Get started", or "©". Plants removed. `npm.cmd test` 10/10, `npm.cmd run check` 66/66. Dashes move on the working button and loading strip, and stand still under reduced motion.

@@ -17,7 +17,7 @@ inclusion: always
 
 ## Every trip route passes this chain, in this order
 token valid? (401) -> member of this trip? (403) -> role allows it? (403) -> body valid? (400) -> do the work.
-The membership check is never skipped. Errors are always `{ "error": "message" }`; 500s say only "Something went wrong" and log the real error.
+The membership check is never skipped. Errors are always `{ "error": "message" }`; 500s return one fixed plain sentence ("The TripSync server could not finish this request. Please try again in a minute.") and log the real error on the server, never sending internal details.
 
 ## Secrets
 - Real values live only in `server/.dev.vars` (local) and Render's dashboard (live). Never in the repo, chat, logs, screenshots or commit messages.
@@ -26,6 +26,11 @@ The membership check is never skipped. Errors are always `{ "error": "message" }
 ## Commands on this PC (Windows)
 - Use `npm.cmd` / `npx.cmd` (PowerShell blocks `npm`). Dev: `npm.cmd run dev`. Unit tests: `npm.cmd test`. Full check: `npm.cmd run check` (add `-- --live` for the live site).
 - Host memory is tight: run one dev server at a time, stop it when done, and keep only one browser check running.
+
+## Screenshots (a chat breaks if this is ignored)
+- Take browser screenshots at a viewport no wider than 1280 px and no taller than 1600 px (phone checks at 390 px wide). Never full-page captures of long pages.
+- Open a screenshot in the chat only when a check fails or the look itself must be judged, and at most 3 per step. Prefer reading the page as text.
+- Delete screenshot files when the step is done.
 
 ## Git
 - One commit per finished step, author passed with one-off flags; never change git config. No secrets in commits.

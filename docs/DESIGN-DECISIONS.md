@@ -75,6 +75,20 @@ How these are drawn (Step 1.6), so the slop guard can hold the "no shadows" rule
 - The Show button in a password field sits inside a field that already wears the focus ring. It marks its own focus with a 3px ink outline drawn inside its edge.
 - The moving road line (loading strip and working button) is one shared component, `RoadDashes`. It is a row of real dash elements that slides left by one dash plus one gap and repeats. It used to be a striped CSS fill; that counted as a gradient, which the steering bans with no exceptions. It looks the same, and it still stands still under reduced motion.
 
+## Maps (Step 2)
+
+- Tiles are OpenStreetMap's, shown in greyscale (a CSS filter on the tile layer only). OSM's own greens and pinks fight the yellow caps; in grey, the stones are the only colour on the map, which is how a route board reads.
+- Pins are tiny kilometre stones drawn in HTML and CSS (Leaflet `divIcon`, no image files): yellow cap, white face, the number on the face, the 4px base. The destination is the "0" stone, like the zero stone at the start of a highway. Leaflet's blue teardrop is never loaded.
+- Planned stops (Step 3) will carry their order number on the face; nearby places (Step 7) get an ink cap so they never look like a planned stop.
+- The map sits in the same 2px ink frame as every board. Zoom buttons are repainted as stone plates with the shared hover and focus states. The attribution "© OpenStreetMap contributors" stays visible bottom right, on a stone strip.
+- Scroll-wheel zoom is off, so scrolling the page on a laptop does not get stuck inside the map.
+
+## Motion in use
+
+Only two things move, and both mean "still working":
+- The road-dash line (loading strip, working button).
+- The turning dashed square on `/status` (since Step 0). Reason: that page lists several checks that finish at different times; a mark that keeps turning says "this one is still running" without a spinner or a line of text per row, and stops being a question the moment the solid square (passed) or red triangle (failed) replaces it. It turns a quarter turn on a loop, 1.6 s, linear. Under `prefers-reduced-motion` it stands still as a plain dashed square (proved by the browser check with reduced motion on).
+
 ## Slop guard exceptions (slop-ok)
 
 `npm run check` fails on the banned values in `.kiro/steering/design.md`. A line may opt out only by ending in the comment `slop-ok: <reason>`, and only if that exact reason is written in this list.
@@ -99,8 +113,24 @@ How these are drawn (Step 1.6), so the slop guard can hold the "no shadows" rule
 - **Your trips (empty state):** an unpainted stone (dashed outline) and a sentence saying where trips will appear. Not a grey icon with "No data found".
 - **Loading:** a short strip of road whose dashed centre line moves, plus a sentence saying what we are waiting for ("Checking your login"). It stands still under reduced motion. A button that is working stays solid and shows the same moving dash along its bottom.
 - **Service status (`/status`):** the Step 0 build check, kept as a plain page that shows whether the API and database answer. Useful before a demo once the API sleeps on Render.
+- **Your trips (list, Step 2):** one route-board row per trip, nearest start date first. Each row is a small stone (destination on the cap, number of days on the face) beside the trip name, place and dates, a plain line ("Starts in 5 days. 4 people. You own this trip.") and the budget strip. The whole row is one link; hover thickens its outline like a button. On a phone the stone sits above the lines.
+- **Budget strip:** spent against budget as a flat painted bar in an ink frame. Over budget turns the fill and the "over budget" words road-sign red. No budget set says so in words instead of drawing an empty bar.
+- **Plan a new trip:** the form board on the left, the map on the right. Before a destination is picked, the map space is an unpainted (dashed) board with one sentence, not a grey box. The destination search is a combobox (type, arrows, Enter, Escape) whose suggestions drop down as a stone list; the picked place is confirmed under the field with a tiny yellow-capped stone mark. The day count and the rupee amount are echoed under the fields as you type ("4 days, 16 to 19 Oct 2026").
+- **Trip page:** a stone-coloured route board across the top (back link, trip name in large condensed lettering, place and dates, then tabs). The tab you are on gets a yellow cap strip and joins the page below. The Overview opens on "The route": one day stone per date standing on a kerb line, scrolling sideways on a phone. Below: the map, and a side column with the budget and the group.
+- **Trip settings (owner only):** the same trip form, with the destination shown as fixed text. Deleting lives in a separate board with the red band of a warning sign, and asks first in a TripSync dialog (HTML `<dialog>`, focus starts on "Keep it", Escape closes). No browser `confirm()`.
+
+## Data choices made in Step 2
+
+- Trip dates are stored as `YYYY-MM-DD` text, not timestamps. A trip date is a day on the calendar; text cannot shift to the day before on a server in another time zone.
+- A trip is at most 30 days long, and its budget at most Rs 1 crore (whole paise). Both are checked in the form and again by the API.
+- The destination cannot change once the trip exists (its map, weather and nearby places hang off it). Owners change only the name, dates and budget.
+- Shortening a trip that would drop a day with stops is refused with HTTP 409 and the reason ("These dates would remove Day 3 (1 stop). Delete or move those stops first"). 409 because the request is well-formed but clashes with what is in the trip; malformed dates and budgets are 400.
+- Changing dates rewrites the days list inside MongoDB in one update (keep the days still inside the range, add new empty ones, renumber), never load-change-save, so stops another member adds meanwhile survive.
+- A stranger gets 403 on a trip that exists and 404 on one that does not.
 
 ## Change log
+
+- 2026-10-11, Step 2: trips list, plan a new trip, trip page with the route of day stones and the map, trip settings with delete. Added the Maps section (grey OSM tiles, stone pins), the motion list with the reason for the turning mark on `/status`, and the Step 2 data choices.
 
 - 2026-10-11, Step 1.6: added the slop guard to `npm run check`. Fixed its six hits without exceptions: two striped fills became the shared `RoadDashes` row, and four non-focus shadows became outlines. Nothing changes visibly.
 - 2026-10-11, Step 1.5: Ashish asked to drop the hard ink offset. Removed it from every button and board, along with the `--lift` token. Buttons now show hover as a heavier outline and press as a darker fill. The stone's 6px base stays; it is part of the stone's outline, not a shadow.

@@ -1,0 +1,69 @@
+.page {
+  padding: var(--space-6) var(--page-gutter) var(--space-8);
+  max-width: 72rem;
+}
+
+.title {
+  font-size: var(--text-3xl);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  margin-bottom: var(--space-2);
+}
+
+.intro {
+  font-size: var(--text-lg);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.board {
+  padding: var(--space-5);
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.side {
+  position: sticky;
+  top: var(--space-4);
+}
+
+/* Before a destination is picked: an outlined frame with a sentence, not a grey box */
+.mapWaiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20rem;
+  padding: var(--space-5);
+  border: 3px dashed var(--ink);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.mapWaiting p {
+  margin: 0;
+  max-width: 18rem;
+}
+
+@media (max-width: 52rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    position: static;
+  }
+
+  .mapWaiting {
+    min-height: 8rem;
+  }
+
+  .board {
+    padding: var(--space-4);
+  }
+}

@@ -1,0 +1,47 @@
+.wrap {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.line {
+  margin: 0;
+}
+
+.amount {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 750;
+  font-size: var(--text-lg);
+}
+
+.compact .amount {
+  font-size: var(--text-md);
+}
+
+.over {
+  color: var(--signal);
+  font-weight: 700;
+}
+
+.track {
+  height: 0.9rem;
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.compact .track {
+  height: 0.6rem;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--cap);
+  border-right: 2px solid var(--ink);
+}
+
+.fillOver {
+  background: var(--signal);
+}

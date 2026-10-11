@@ -1,0 +1,28 @@
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.summary {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 600;
+}
+
+.submit {
+  justify-self: start;
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 30rem) {
+  .dates {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,97 @@
+/* The trip's route board: name, where and when, then the section tabs */
+.head {
+  padding: var(--space-5) var(--page-gutter) 0;
+  background: var(--stone);
+  border-bottom: var(--line);
+}
+
+.back {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  font-size: var(--text-sm);
+}
+
+.name {
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  margin: var(--space-2) 0 var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.where {
+  margin: 0 0 var(--space-4);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  margin-bottom: -2px; /* the current tab sits on the board's bottom line */
+}
+
+.tab {
+  flex: none;
+  padding: var(--space-2) var(--space-4);
+  border: var(--line);
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: var(--cap);
+}
+
+.tab:focus-visible {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* The tab you are on: joins the page below it */
+.current {
+  background: var(--ground);
+  border-bottom: 2px solid var(--ground);
+  position: relative;
+}
+
+.current::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: -2px;
+  height: 6px;
+  background: var(--cap);
+  border: var(--line);
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.tab:not(.current) {
+  background: var(--stone);
+}
+
+.page {
+  padding: var(--space-5) var(--page-gutter) var(--space-8);
+  max-width: 76rem;
+}
+
+.problem {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 36rem;
+  padding-top: var(--space-7);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}

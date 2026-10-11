@@ -1,0 +1,70 @@
+/* The row scrolls sideways on narrow screens; the next stone peeks in. */
+.road {
+  display: flex;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-2) 0 var(--space-3);
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+
+.stop {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+/* The kerb: each stop draws its piece of the line, reaching across the gap */
+.post {
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 3px solid var(--ink);
+  margin-right: calc(-1 * var(--space-4));
+  padding-right: var(--space-4);
+}
+
+.stop:last-child .post {
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.stops {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* As buttons: the same states as every other control */
+.button {
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--fast) var(--ease);
+}
+
+.button:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: -5px;
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+/* Keep the stone's dome shape when the focus ring is drawn around it */
+.button:focus-visible {
+  border-radius: var(--radius-dome);
+}
+
+/* The chosen day: the cap is painted ink with stone lettering, the face turns cap yellow */
+.selected > span:first-child {
+  background: var(--ink);
+  color: var(--stone);
+}
+
+.selected > span:last-child {
+  background: var(--cap);
+}
+
+.selected:hover {
+  outline-color: var(--ink);
+}

@@ -1,0 +1,28 @@
+.dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: var(--space-5);
+  background: var(--stone);
+  color: var(--ink);
+  border: var(--line);
+  border-top: 8px solid var(--signal); /* the red band of a warning board */
+  border-radius: var(--radius-sm);
+}
+
+.dialog::backdrop {
+  background: rgb(22 24 27 / 0.6);
+}
+
+.title {
+  font-size: var(--text-xl);
+}
+
+.body > :last-child {
+  margin-bottom: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}

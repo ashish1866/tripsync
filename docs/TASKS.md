@@ -13,9 +13,10 @@ Add a section to `npm.cmd run check` that scans `client/src` and `client/index.h
 - A line ending in the comment `slop-ok: <reason>` is skipped, and the reason must also be logged in DESIGN-DECISIONS.md.
 - Done when: the check passes on the current code (fix or justify every hit), and a deliberately planted banned value makes it fail (then remove the plant).
 
-## - [ ] Step 2: Trips
+## - [x] Step 2: Trips
 Create, list, edit, delete. Destination search through `/api/geo/destinations` (Open-Meteo geocoding). Map point for the destination (stone-shaped pin, not Leaflet's default). One day per date created automatically. Owner-only edit/delete. Shortening a trip is refused if the removed days have activities, with the reason.
 - Done when: "Manali Trip" shows on My Trips with its location; a stranger reading a trip gets 403; a non-owner editing gets 403; bad dates or budget get 400.
+- Also in this step: log in DESIGN-DECISIONS.md the reason for the turning "still checking" mark on `/status` (the motion shows a check is still running) and confirm it stands still under reduced motion.
 
 ## - [ ] Step 3: Itinerary and map
 Activities per day (title, time, notes, place via Geoapify autocomplete `/api/geo/spots`). Pins for the destination and every activity. Single-item updates only.

@@ -1,0 +1,41 @@
+.layout {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 34rem;
+}
+
+.board {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.board h2,
+.danger h2 {
+  font-size: var(--text-xl);
+  margin: 0;
+}
+
+.fixed {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+/* Destructive area: a board with the red band of a warning sign */
+.danger {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-5);
+  background: var(--stone);
+  border: var(--line);
+  border-top: 8px solid var(--signal);
+  border-radius: var(--radius-sm);
+}
+
+.danger p {
+  margin: 0;
+}

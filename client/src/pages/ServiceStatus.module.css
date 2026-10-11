@@ -75,6 +75,13 @@
   }
 }
 
+/* The turning mark only says "still checking"; with reduced motion it stands still. */
+@media (prefers-reduced-motion: reduce) {
+  .loading .mark {
+    animation: none;
+  }
+}
+
 @media (max-width: 34rem) {
   .check {
     grid-template-columns: 1.25rem minmax(0, 1fr);

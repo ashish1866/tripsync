@@ -1,0 +1,133 @@
+/* The map frame: a plain painted board edge, no rounded card, no shadow. */
+.frame {
+  margin: 0;
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--ground);
+}
+
+.map {
+  height: var(--map-height);
+  width: 100%;
+  font-family: var(--font-body);
+}
+
+/* OpenStreetMap's colours compete with the pins; grey tiles let the yellow
+   stones be the only colour on the map. (See DESIGN-DECISIONS, "Maps".) */
+.map :global(.leaflet-tile-pane) {
+  filter: grayscale(1) contrast(0.92) brightness(1.04);
+}
+
+/* Leaflet's own controls, repainted as route-board plates */
+.map :global(.leaflet-bar) {
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.map :global(.leaflet-bar a) {
+  width: 2.25rem;
+  height: 2.25rem;
+  line-height: 2.25rem;
+  background: var(--stone);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  border-bottom: var(--line-thin);
+}
+
+.map :global(.leaflet-bar a:hover) {
+  background: var(--cap);
+  color: var(--ink);
+}
+
+.map :global(.leaflet-bar a:focus-visible) {
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
+}
+
+.map :global(.leaflet-bar a.leaflet-disabled) {
+  background: var(--ground);
+  color: var(--ink-muted);
+}
+
+.map :global(.leaflet-control-attribution) {
+  background: var(--stone);
+  color: var(--ink);
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  border-top: var(--line-thin);
+  border-left: var(--line-thin);
+}
+
+.map :global(.leaflet-control-attribution a) {
+  color: var(--ink);
+}
+
+/* Pins: tiny kilometre stones */
+.map :global(.ts-pin) {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--stone);
+  border: 2px solid var(--ink);
+  border-bottom-width: 4px;
+  border-radius: var(--radius-dome);
+  overflow: hidden;
+  color: var(--ink);
+}
+
+.map :global(.ts-pin-cap) {
+  flex: 0 0 42%;
+  background: var(--cap);
+  border-bottom: 2px solid var(--ink);
+}
+
+.map :global(.ts-pin-face) {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-painted);
+  font-weight: 800;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.map :global(.ts-pin-destination .ts-pin-face) {
+  font-size: 1.05rem;
+}
+
+/* Explore places: the cap is painted ink, so they never look like planned stops */
+.map :global(.ts-pin-place .ts-pin-cap) {
+  background: var(--ink);
+}
+
+/* Stops on other days: unpainted cap, paler */
+.map :global(.ts-pin-faded) {
+  opacity: 0.7;
+}
+.map :global(.ts-pin-faded .ts-pin-cap) {
+  background: var(--stone);
+}
+
+.tooltip {
+  background: var(--ink);
+  color: var(--stone);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  padding: 2px 8px;
+}
+
+.tooltip::before {
+  display: none;
+}

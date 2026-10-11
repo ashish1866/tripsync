@@ -1,0 +1,75 @@
+.wrap {
+  position: relative;
+}
+
+.list {
+  position: absolute;
+  z-index: 1100; /* above the map, which uses up to 1000 */
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.option {
+  display: grid;
+  gap: 0.1rem;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+
+.option + .option {
+  border-top: var(--line-thin);
+}
+
+.active {
+  background: var(--cap);
+}
+
+.optionName {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-sign);
+  font-weight: 650;
+}
+
+.optionMore {
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.note {
+  padding: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.problem {
+  color: var(--signal);
+  font-weight: 500;
+}
+
+.picked {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* A tiny stone: picked */
+.pickedMark {
+  flex: none;
+  width: 0.7rem;
+  height: 0.85rem;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-dome);
+  background: var(--cap);
+}

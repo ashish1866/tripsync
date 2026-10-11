@@ -1,9 +1,27 @@
 .page {
   padding: var(--space-6) var(--page-gutter) var(--space-8);
+  max-width: 64rem;
+}
+
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 
 .since {
   color: var(--ink-muted);
+  margin: 0;
+}
+
+.problem {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  max-width: 34rem;
 }
 
 .empty {
@@ -34,7 +52,65 @@
   border-radius: var(--radius-dome);
 }
 
-.note {
+/* The list: route-board rows, each a stone and its lines */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-end;
+  padding: var(--space-4);
+  background: var(--stone);
+  border: var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.row:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: -4px;
+}
+
+.row:hover .name {
+  text-decoration: underline;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+}
+
+.details {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.name {
+  font-size: var(--text-xl);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.where,
+.meta {
+  margin: 0;
+}
+
+.meta {
   color: var(--ink-muted);
   font-size: var(--text-sm);
+  margin-bottom: var(--space-2);
+}
+
+@media (max-width: 34rem) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
