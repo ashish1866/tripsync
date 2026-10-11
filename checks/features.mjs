@@ -176,8 +176,9 @@ async function extrasChecks(ctx) {
   record('Category settlement: only the 2 payments marked as paid', JSON.stringify(got(pays)) === JSON.stringify(expectIds((r) => r.category === 'settlement')) && pays.data.total === 2, got(pays).join(', '));
   const mine = (uid) => (r) => r.paidBy === uid || r.splits.some((s) => s.uid === uid);
   const rahulAll = await ask(`?person=${rb.uid}`);
-  const rahulP2 = await ask(`?person=${rb.uid}&page=2`);
-  record('Person Rahul: every bill he paid or has a share in (all but none of the others), paged', rahulAll.data.total === rows.filter(mine(rb.uid)).length && JSON.stringify([...got(rahulAll), ...got(rahulP2)].slice(0, rahulAll.data.total)) === JSON.stringify(expectIds(mine(rb.uid))), `${rahulAll.data?.total} of 47`);
+  const rahulRows = [...got(rahulAll)];
+  for (let n = 2; n <= rahulAll.data.pages; n++) rahulRows.push(...got(await ask(`?person=${rb.uid}&page=${n}`)));
+  record('Person Rahul: every bill he paid or has a share in, and no others, across all his pages', rahulAll.data.total === rows.filter(mine(rb.uid)).length && JSON.stringify(rahulRows) === JSON.stringify(expectIds(mine(rb.uid))), `${rahulAll.data?.total} of 47 over ${rahulAll.data?.pages} pages, got ${rahulRows.length} rows`);
   const ankitAll = await ask(`?person=${rc.uid}`);
   record('Person Ankit: only bills he paid or shares, so fewer rows than Rahul', ankitAll.data.total === rows.filter(mine(rc.uid)).length && ankitAll.data.total < rahulAll.data.total, `${ankitAll.data?.total}`);
   const both = await ask(`?category=travel&person=${rb.uid}`);
