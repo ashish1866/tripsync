@@ -2,7 +2,8 @@
 // Each section uses its own throwaway accounts (made through ctx.newUser, so the
 // clean-up in run.mjs deletes them and everything they own).
 //
-// ctx: { base, call, record, setSection, newUser, db, openPage, PHONE, shot, saveLook, overflowOf, hasError, login }
+// ctx: { base, call, record, setSection, newUser, limiter, db, openPage, PHONE, shot, saveLook, overflowOf, hasError, login }
+// newUser(tag, name) gives a pool account (the same person for the same name in every section; its data is wiped before and after the run).
 
 import { ObjectId } from 'mongodb';
 
@@ -189,7 +190,7 @@ async function extrasChecks(ctx) {
   const injected = await ask('?person[$ne]=x');
   record('A MongoDB-looking query value is ignored, never run (returns all 47)', injected.status === 200 && injected.data.total === 47, `HTTP ${injected.status} total ${injected.data?.total}`);
   const viewerSees = await ask('', rc);
-  const outsiderAsks = await ask('', stranger);
+  const outsiderAsks = await ask('', await ctx.newUser('ystranger2', 'Kabir Check')); // not in this trip (Ankit is, as a viewer)
   record('A viewer reads the bills (200); a stranger cannot (403)', viewerSees.status === 200 && outsiderAsks.status === 403, `${viewerSees.status}/${outsiderAsks.status}`);
 
   // ---------- in the browser ----------
@@ -833,7 +834,7 @@ async function membersChecks(ctx) {
   record('A member leaves on their own: 200, then 403', left.status === 200 && left.data?.left === true && dhruvAfter.status === 403, `HTTP ${left.status} then ${dhruvAfter.status}`);
 
   // Rate limits, counted per account
-  const guesser = await ctx.newUser('mguesser', 'Guess Limit');
+  const guesser = await ctx.limiter(); // a pool account whose rate-limit counters have rested
   const statuses = [];
   for (let i = 0; i < 11; i++) statuses.push((await call('POST', `/invites/ZZZZ${String(2222 + i).replace(/[01]/g, '9')}/join`, { token: guesser.token })).status);
   const limited = await call('POST', '/invites/ZZZZ9999/join', { token: guesser.token });

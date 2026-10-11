@@ -13,12 +13,17 @@
 //   4. Timing: 10 requests each to three API routes, min / median / max.
 //   5. The sign-up / log-in / log-out story in a real browser, plus phone width.
 //
-// Throwaway accounts: it creates Firebase accounts named tripsync.check.*@example.com.
-// Each one is written to checks/.artifacts/test-accounts.json BEFORE it is created.
-// At the end, every account in that file is deleted from Firebase (accounts:delete
-// with that user's own ID token) and from MongoDB, and the deletion is proved by
-// trying to log in again. Accounts left over by an earlier run that crashed are
-// deleted the same way on the next run.
+// Test accounts (Firebase limits sign-ups, so there is a fixed pool):
+//   - The pool: tripsync.check.pool.*@example.com. Each is created ONCE and reused by
+//     every run; its email and random password live in the git-ignored
+//     checks/.test-accounts.json (written before the account exists). Their MongoDB
+//     data is wiped at the start and again at the end of each run, and checked to be gone.
+//   - One fresh account per run, for the sign-up story only. It is written to
+//     checks/.artifacts/test-accounts.json BEFORE it is created, and at the end it is
+//     deleted from Firebase (accounts:delete with its own ID token) and MongoDB, and the
+//     deletion is proved by trying to log in again. If a run crashed, the next run
+//     deletes the leftover the same way.
+//   - To remove the pool for good (Step 10, before shipping): npm run check -- --delete-pool
 //
 // Uses the Chrome already installed on this PC (playwright-core, no browser download).
 // Screenshots go to checks/.artifacts only when a check fails, or with --look.
@@ -166,30 +171,123 @@ async function removeUserData(uid) {
   await users().deleteMany({ firebaseUid: uid });
 }
 
-// A throwaway account with a TripSync profile: { uid, token, email, password, name }.
-// One account per name for the whole run: "Ashish Check" is the same person in
-// every section (each section makes its own trips). Firebase limits how many
-// accounts one address can create per hour, so a run must not make dozens.
-const people = new Map();
-async function newUser(tag, name) {
-  if (people.has(name)) return people.get(name);
-  const person = makeUser(tag, name);
-  people.set(name, person);
-  try {
-    return await person;
-  } catch (err) {
-    people.delete(name);
-    throw err;
+// ---------- the fixed pool of test accounts ----------
+// Signing up real Firebase accounts is rate-limited (TOO_MANY_ATTEMPTS_TRY_LATER),
+// so the check does not make a new account for every person in every section.
+// It keeps a small fixed pool: each account is created once (first run), its
+// email and random password are kept in the git-ignored checks/.test-accounts.json,
+// and every later run just logs in to the same accounts. What makes each run
+// start clean is MongoDB: all the pool's data (profiles, trips, bills, invites,
+// memberships) is wiped at the start and again at the end.
+// Only the sign-up story in the browser makes one fresh account per run, and
+// deletes it. To remove the pool for good (before shipping): npm run check -- --delete-pool
+const POOL_FILE = path.join(root, 'checks', '.test-accounts.json');
+const pool = existsSync(POOL_FILE) ? JSON.parse(readFileSync(POOL_FILE, 'utf8')) : {};
+const savePool = () => writeFileSync(POOL_FILE, JSON.stringify(pool, null, 2));
+const POOL_EMAIL = /^tripsync\.check\.pool\./;
+const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const firebaseCode = (err) => String(err.message).split(': ').pop();
+
+function poolRecord(key) {
+  if (!pool[key]) {
+    pool[key] = { email: `tripsync.check.pool.${key}@example.com`, password: `Check-${crypto.randomUUID()}` };
+    savePool(); // written BEFORE the account exists, so a crash can never lose its password
   }
+  return pool[key];
 }
 
-async function makeUser(tag, name) {
-  const account = newAccount(tag);
-  const signUp = await firebase('signUp', { email: account.email, password: account.password, returnSecureToken: true });
-  const profile = await call('POST', '/users/me', { token: signUp.idToken, body: { name } });
-  if (profile.status !== 201) throw new Error(`profile for ${tag}: HTTP ${profile.status}`);
-  return { ...account, uid: signUp.localId, token: signUp.idToken, name };
+const refused = (code) =>
+  /TOO_MANY_ATTEMPTS/.test(code)
+    ? `Firebase refused with ${code}. This is a blocker: write it under "Blocked" in docs/PROGRESS.md and stop, do not wait in a loop.`
+    : `Firebase answered ${code} while opening a test account.`;
+
+// Logs the pool account in (creating it the very first time). { email, password, uid, token }
+async function openSession(key) {
+  const rec = poolRecord(key);
+  let signed = await signIn(rec);
+  if (!signed.ok) {
+    const code = signed.data?.error?.message || 'unknown error';
+    if (!/^(INVALID_LOGIN_CREDENTIALS|EMAIL_NOT_FOUND)/.test(code)) throw new Error(refused(code));
+    // Not logged in: the account does not exist yet (first run), or the stored password is wrong.
+    try {
+      signed = { ok: true, data: await firebase('signUp', { email: rec.email, password: rec.password, returnSecureToken: true }) };
+    } catch (err) {
+      if (/^EMAIL_EXISTS/.test(firebaseCode(err))) {
+        throw new Error(`${rec.email} exists in Firebase, but the password in checks/.test-accounts.json is not its password. Delete that account in the Firebase console (Authentication > Users) and run the check again.`);
+      }
+      throw new Error(refused(firebaseCode(err)));
+    }
+  }
+  return { ...rec, uid: signed.data.localId, token: signed.data.idToken };
 }
+
+const sessions = new Map(); // key -> Promise of the logged-in account
+function poolSession(key) {
+  if (!sessions.has(key)) {
+    sessions.set(
+      key,
+      openSession(key).catch((err) => {
+        sessions.delete(key);
+        throw err;
+      }),
+    );
+  }
+  return sessions.get(key);
+}
+
+// A pool account with a TripSync profile: { uid, token, email, password, name }.
+// "Ashish Check" is the same account in every section (each section makes its own trips).
+async function newUser(_tag, name) {
+  const session = await poolSession(slug(name));
+  if (!session.profiled) {
+    const profile = await call('POST', '/users/me', { token: session.token, body: { name } });
+    if (profile.status !== 201 && profile.status !== 200) throw new Error(`profile for ${name}: HTTP ${profile.status} ${profile.data?.error ?? ''}`);
+    session.profiled = true;
+  }
+  return { ...session, name };
+}
+
+// An account for the rate-limit test. Its counters live in the API's memory for
+// 15 minutes, so each run takes the one that has rested longest.
+const LIMITERS = ['Limit Check A', 'Limit Check B', 'Limit Check C', 'Limit Check D'];
+async function limiter() {
+  const idle = (name) => Date.now() - (pool[slug(name)]?.rateTestAt ?? 0);
+  const rested = LIMITERS.find((name) => idle(name) > 16 * 60 * 1000) ?? LIMITERS.reduce((a, b) => (idle(a) >= idle(b) ? a : b));
+  const user = await newUser('limiter', rested);
+  pool[slug(rested)].rateTestAt = Date.now();
+  savePool();
+  return user;
+}
+
+// Wipes everything the pool left in MongoDB. Finds the accounts by their email in
+// the profiles, so it needs no Firebase call. Returns how many profiles it found.
+async function wipePool() {
+  const rows = await users().find({ email: POOL_EMAIL }, { projection: { firebaseUid: 1 } }).toArray();
+  for (const row of rows) await removeUserData(row.firebaseUid);
+  return rows.length;
+}
+
+// npm run check -- --delete-pool : removes every pool account from Firebase and MongoDB, proves it, and forgets the file.
+async function deletePool() {
+  await mongo.connect();
+  const wiped = await wipePool();
+  const outcome = [];
+  for (const [key, rec] of Object.entries(pool)) {
+    try {
+      outcome.push(`${key}: ${await removeAccount(rec)}`);
+      delete pool[key];
+    } catch (err) {
+      outcome.push(`${key}: NOT DELETED (${err.message})`);
+    }
+  }
+  savePool();
+  const stray = await users().countDocuments({ email: /^tripsync\.check\./ });
+  console.log(`Pool removal: ${wiped} profiles wiped; ${outcome.join('; ') || 'no accounts in the pool file'}`);
+  console.log(`Accounts still in the pool file: ${Object.keys(pool).length}. Test profiles still in MongoDB: ${stray}.`);
+  await mongo.close();
+  process.exit(Object.keys(pool).length === 0 && stray === 0 ? 0 : 1);
+}
+if (args.includes('--delete-pool')) await deletePool();
 
 // Logs a test account in through the real log-in form, then waits for /trips.
 async function login(page, account) {
@@ -248,6 +346,14 @@ let apiToken = null; // the "api" test account's token, reused for timing
 
 try {
   await mongo.connect();
+
+  // The fixed test accounts start every run with no data at all.
+  section = 'Test accounts';
+  {
+    const wiped = await wipePool();
+    const left = await users().countDocuments({ email: POOL_EMAIL });
+    record(`The fixed test accounts start clean: their data wiped (${wiped} profiles found)`, left === 0, `${left} profiles left`);
+  }
 
   // The very first API request of the run. On Render's free plan this is the one
   // that wakes the server if it was asleep, so it is timed on its own.
@@ -345,10 +451,11 @@ try {
   // ====================== 3. Profile API with a real account ======================
   section = 'Profile API';
   {
-    const account = newAccount('api');
-    const signUp = await firebase('signUp', { ...account, returnSecureToken: true });
-    const token = signUp.idToken;
-    const uid = signUp.localId;
+    // A pool account that was wiped at the start of the run, so it has a Firebase
+    // login but no TripSync profile yet (the "first login" case).
+    const account = await poolSession('profile-check');
+    const token = account.token;
+    const uid = account.uid;
 
     // Edited token: a real token with the user id changed after Google signed it
     const [h, p, s] = token.split('.');
@@ -522,6 +629,7 @@ try {
       section = name;
     },
     newUser,
+    limiter,
     login,
     db: mongoDb(),
     openPage,
@@ -534,8 +642,26 @@ try {
 } catch (err) {
   record('The check itself ran to the end', false, err.stack?.split('\n').slice(0, 2).join(' ') ?? String(err));
 } finally {
-  // Clean up every account in the ledger: this run's, and any an earlier run left behind.
   section = 'Clean-up';
+  // 1. The fixed pool keeps its Firebase logins but not one byte of data.
+  try {
+    const poolUids = [];
+    for (const opened of sessions.values()) poolUids.push(...(await opened.then((s) => [s.uid], () => [])));
+    await wipePool();
+    for (const uid of poolUids) await removeUserData(uid);
+    const trips = mongoDb().collection('trips');
+    const left = {
+      profiles: await users().countDocuments({ email: POOL_EMAIL }),
+      ownedTrips: await trips.countDocuments({ owner: { $in: poolUids } }),
+      memberships: await trips.countDocuments({ 'members.uid': { $in: poolUids } }),
+      bills: await mongoDb().collection('expenses').countDocuments({ createdBy: { $in: poolUids } }),
+    };
+    record(`The fixed test accounts (${poolUids.length}) are wiped after the run: no profiles, trips, memberships or bills left`, Object.values(left).every((n) => n === 0), JSON.stringify(left));
+  } catch (err) {
+    record('The fixed test accounts were wiped after the run', false, err.message);
+  }
+
+  // 2. The one fresh account this run made (the sign-up story): deleted from Firebase and MongoDB, and proved gone.
   const thisRun = ledger.filter((a) => a.run === stamp).length;
   const outcome = { deleted: 0, absent: 0 };
   for (const account of [...ledger]) {

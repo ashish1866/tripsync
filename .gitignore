@@ -14,6 +14,9 @@ dist/
 # Browser check artifacts (screenshots, reports)
 checks/.artifacts/
 
+# The fixed pool of test accounts (emails and random passwords), never committed
+checks/.test-accounts.json
+
 # Logs and OS clutter
 *.log
 .DS_Store
