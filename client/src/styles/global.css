@@ -82,12 +82,14 @@ code {
   border: 0;
 }
 
+/* Reduced motion, as a safety net under every file's own calm version (and
+   library CSS such as Leaflet's): any animation or transition is over at once. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: var(--t-instant) !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: var(--t-instant) !important;
   }
 }

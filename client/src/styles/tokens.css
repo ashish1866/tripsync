@@ -77,6 +77,7 @@
   --t-wet: 1400ms;      /* fresh paint stays wet this long... */
   --t-dry: 600ms;       /* ...then dries away */
   --t-fade: 150ms;      /* a plain fade: the calm version of travelling */
+  --t-instant: 0.01ms;  /* reduced motion's blanket rule: over at once, but still ends like an animation */
 
   /* Focus ring: always visible, on any surface */
   --focus: 0 0 0 3px var(--stone), 0 0 0 6px var(--ink);

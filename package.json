@@ -11,7 +11,7 @@
     "build": "npm run build -w client",
     "deploy": "npm run build -w client && npm run deploy -w server",
     "preview:worker": "npm run build -w client && npm run preview:worker -w server",
-    "test": "npm run test -w server",
+    "test": "npm run test -w server && node checks/slopGuard.mjs --self-test",
     "setup-db": "npm run setup-db -w server",
     "seed": "npm run seed -w server --",
     "lock:server": "node scripts/lock-server.mjs",
