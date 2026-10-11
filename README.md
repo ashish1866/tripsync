@@ -142,13 +142,13 @@ The visual decisions and the reasons for them are in `docs/DESIGN-DECISIONS.md`.
 
 ## Measured speed
 
-Measured with `npm run check -- --live` from Ashish's PC on 2026-10-12 (median of 10 requests each, including the network; the website is served from Cloudflare, so a request goes PC ? Cloudflare (Marseille on this connection) ? Render in Singapore ? MongoDB in Mumbai and back):
+Measured with `npm run check -- --live` from Ashish's PC on 2026-10-12 (the second run that day, 386/386 passed; median of 10 requests each, including the network; the website is served from Cloudflare, so a request goes PC ? Cloudflare (Marseille on this connection) ? Render in Singapore ? MongoDB in Mumbai and back):
 
 | Request | Through the live site | Same API on this PC |
 |---|---|---|
-| `GET /api/health/ping` (no database) | 326 ms (min 303, max 410) | 5 ms |
-| `GET /api/health` (MongoDB ping) | 376 ms (min 371, max 434) | 42 ms |
-| `GET /api/users/me` (token check + a MongoDB read) | 418 ms (min 369, max 1157) | 44 ms |
-| First request of the run | 1,168 ms | 27 ms |
+| `GET /api/health/ping` (no database) | 312 ms (min 297, max 335) | 5 ms |
+| `GET /api/health` (MongoDB ping) | 375 ms (min 364, max 493) | 42 ms |
+| `GET /api/users/me` (token check + a MongoDB read) | 371 ms (min 357, max 423) | 44 ms |
+| First request of the run | 814 ms | 27 ms |
 
 Almost all of the live time is the journey, not the work: the database read adds about 50 to 90 ms to a bare ping. Calling Render directly (not through the Worker) took about 0.19 s when measured on 2026-10-11.
