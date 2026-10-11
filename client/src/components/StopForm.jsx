@@ -11,7 +11,7 @@ import styles from './StopForm.module.css';
 const samePlace = (a, b) => (a?.placeId || '') === (b?.placeId || '') && JSON.stringify(a?.location) === JSON.stringify(b?.location);
 
 // Add a stop to a day, or edit one. Talks to the API itself and hands the
-// updated trip to onSaved(trip).
+// updated trip to onSaved(trip, stop); `stop` is the new stop when adding.
 // Editing sends only the fields that changed, so it never overwrites a
 // different field another member saved meanwhile.
 export default function StopForm({ trip, dayNumber, stop, onSaved, onCancel }) {
@@ -92,7 +92,7 @@ export default function StopForm({ trip, dayNumber, stop, onSaved, onCancel }) {
         autoTitle.current = '';
         setSearchKey((k) => k + 1);
       }
-      onSaved(data.trip);
+      onSaved(data.trip, data.activity);
     } catch (err) {
       setErrors({ form: errorMessage(err) });
     } finally {

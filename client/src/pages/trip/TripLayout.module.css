@@ -78,6 +78,35 @@
   background: var(--stone);
 }
 
+/* Moving to another tab: its yellow cap is painted on in one stroke, in the
+   direction you moved (left to right if the new tab is to the right). Only
+   after a move; the first view of the trip shows the cap already painted. */
+.tabs[data-moved='right'] .current::before {
+  transform-origin: left;
+  animation: paint-across var(--t-paint) var(--ease-brush) both;
+}
+
+.tabs[data-moved='left'] .current::before {
+  transform-origin: right;
+  animation: paint-across var(--t-paint) var(--ease-brush) both;
+}
+
+@keyframes paint-across {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Calm version: the cap is simply there */
+@media (prefers-reduced-motion: reduce) {
+  .tabs[data-moved] .current::before {
+    animation: none;
+  }
+}
+
 .page {
   padding: var(--space-5) var(--page-gutter) var(--space-8);
   max-width: 76rem;

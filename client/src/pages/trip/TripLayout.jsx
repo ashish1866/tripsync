@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useParams } from 'react-router';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router';
 import api, { errorMessage } from '../../api/client';
 import AppHeader from '../../components/AppHeader';
 import Button from '../../components/Button';
@@ -64,6 +64,18 @@ export default function TripLayout() {
     if (datesKey) loadWeather();
   }, [datesKey, loadWeather]);
 
+  // Which way you moved along the tabs, so the yellow cap is painted onto the
+  // new tab in that direction (see DESIGN-DECISIONS, "Motion"). Nothing on the first view.
+  const { pathname } = useLocation();
+  const section = pathname.replace(/\/+$/, '').split('/')[3] ?? '';
+  const tabIndex = TABS.findIndex((t) => t.to === section);
+  const lastTab = useRef(tabIndex);
+  const [moved, setMoved] = useState(null);
+  useLayoutEffect(() => {
+    if (lastTab.current !== tabIndex && lastTab.current >= 0 && tabIndex >= 0) setMoved(tabIndex > lastTab.current ? 'right' : 'left');
+    lastTab.current = tabIndex;
+  }, [tabIndex]);
+
   if (state.status === 'loading') {
     return (
       <>
@@ -109,7 +121,7 @@ export default function TripLayout() {
         <p className={styles.where}>
           {placeLine(trip.destination)}. {formatRange(trip.startDate, trip.endDate)}. {whenLine(trip.startDate, trip.endDate)}.
         </p>
-        <nav className={styles.tabs} aria-label="Trip sections">
+        <nav className={styles.tabs} aria-label="Trip sections" data-moved={moved ?? undefined}>
           {tabs.map((tab) => (
             <NavLink key={tab.label} to={tab.to} end={tab.end} className={({ isActive }) => `${styles.tab} ${isActive ? styles.current : ''}`}>
               {tab.label}

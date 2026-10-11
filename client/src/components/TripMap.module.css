@@ -115,6 +115,34 @@
   background: var(--stone);
 }
 
+/* The pin's own box is the ground: a stone rising out of it is hidden below
+   its base line until it is up. The stone fills the box exactly, so at rest
+   nothing is cut off. */
+.map :global(.ts-pin-ground) {
+  overflow: hidden;
+}
+
+/* A stop just added: its stone rises out of the ground where it stands */
+.map :global(.ts-pin-planted) {
+  animation: rise var(--t-plant) var(--ease-settle) both;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Calm version: the stone is simply there */
+@media (prefers-reduced-motion: reduce) {
+  .map :global(.ts-pin-planted) {
+    animation: none;
+  }
+}
+
 .tooltip {
   background: var(--ink);
   color: var(--stone);

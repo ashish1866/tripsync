@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router';
 import api, { errorMessage } from '../../api/client';
 import DayRoad from '../../components/DayRoad';
@@ -14,6 +14,7 @@ import { tripPins } from '../../utils/pins';
 import { rainWarning, weatherOn } from '../../utils/weather';
 import DayWeather from '../../components/DayWeather';
 import WeatherMark from '../../components/WeatherMark';
+import { useListShift, useTravel } from '../../utils/motion';
 import styles from './DayPlan.module.css';
 
 // The chosen day's forecast in words, and its rain warning.
@@ -61,10 +62,23 @@ export default function DayPlan() {
   const [removing, setRemoving] = useState(null); // the stop being asked about
   const [removeBusy, setRemoveBusy] = useState(false);
   const [problem, setProblem] = useState(null);
+  const [freshId, setFreshId] = useState(null); // the stop just added: wet paint on its row
+
+  // Motion (DESIGN-DECISIONS, "Motion"): the day's stops travel in from the
+  // side you moved to, and stops slide to their new places when the order changes.
+  const dayPanel = useRef(null);
+  const stopList = useRef(null);
+  useTravel(dayPanel, dayNumber);
+  useListShift(
+    stopList,
+    day.activities.map((a) => a.id),
+    dayNumber,
+  );
 
   function selectDay(n) {
     setEditingId(null);
     setProblem(null);
+    setFreshId(null);
     setParams({ day: String(n) }, { replace: true });
   }
 
@@ -92,7 +106,7 @@ export default function DayPlan() {
       </section>
 
       <div className={styles.layout}>
-        <section className={styles.stops} aria-labelledby="day-title">
+        <section ref={dayPanel} className={styles.stops} aria-labelledby="day-title">
           <h2 id="day-title" className={styles.dayTitle}>
             Day {dayNumber}, {formatWeekday(day.date)} {formatDate(day.date)}
           </h2>
@@ -112,9 +126,9 @@ export default function DayPlan() {
           )}
 
           {day.activities.length > 0 && (
-            <ol className={styles.list} aria-label={`Stops on Day ${dayNumber}`}>
+            <ol ref={stopList} className={styles.list} aria-label={`Stops on Day ${dayNumber}`}>
               {day.activities.map((stop, i) => (
-                <li key={stop.id} className={styles.stop}>
+                <li key={stop.id} data-shift-id={stop.id} className={`${styles.stop} ${stop.id === freshId ? 'ts-wet' : ''}`}>
                   {editingId === stop.id ? (
                     <div className={styles.editBoard}>
                       <h3 className={styles.editTitle}>Edit stop {i + 1}</h3>
@@ -171,7 +185,15 @@ export default function DayPlan() {
               <h3 id="add-title" className={styles.editTitle}>
                 Add a stop to Day {dayNumber}
               </h3>
-              <StopForm key={dayNumber} trip={trip} dayNumber={dayNumber} onSaved={setTrip} />
+              <StopForm
+                key={dayNumber}
+                trip={trip}
+                dayNumber={dayNumber}
+                onSaved={(next, stop) => {
+                  setTrip(next);
+                  setFreshId(stop?.id ?? null);
+                }}
+              />
             </section>
           ) : (
             <p className={styles.viewer}>You can view this trip. Only the owner and editors change the plan.</p>
@@ -182,7 +204,7 @@ export default function DayPlan() {
           <h2 id="plan-map-title" className={styles.heading}>
             Map of Day {dayNumber}
           </h2>
-          <TripMap height="26rem" label={`Map of Day ${dayNumber} in ${trip.destination.name}`} pins={tripPins(trip, { selectedDay: dayNumber })} />
+          <TripMap height="26rem" label={`Map of Day ${dayNumber} in ${trip.destination.name}`} pins={tripPins(trip, { selectedDay: dayNumber })} plantNew />
           <p className={styles.legend}>Numbered stones are Day {dayNumber}'s stops in order. Pale stones are stops on other days. The 0 stone is {trip.destination.name}.</p>
         </section>
       </div>

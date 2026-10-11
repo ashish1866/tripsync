@@ -76,9 +76,41 @@
   outline-color: var(--ink);
 }
 
-/* Calm version: the press still shows, with no transition */
+/* A stone you just picked: the yellow goes on base to top in one brush
+   stroke, behind the lettering. At the end it covers the face exactly as the
+   plain yellow above does. */
+.painted > span:last-child {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+}
+
+.painted > span:last-child::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--cap);
+  transform-origin: bottom;
+  animation: paint-up var(--t-paint) var(--ease-brush) both;
+}
+
+@keyframes paint-up {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Calm version: the press still shows, with no transition; the yellow is simply there */
 @media (prefers-reduced-motion: reduce) {
   .button {
     transition: none;
+  }
+
+  .painted > span:last-child::before {
+    animation: none;
   }
 }
