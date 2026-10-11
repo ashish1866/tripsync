@@ -378,7 +378,9 @@ async function packingChecks(ctx) {
   for (const item of ['Warm jacket', 'Power bank', 'Rain cover']) {
     await mine.page.getByLabel('Add an item').fill(item);
     await mine.page.getByRole('button', { name: 'Add to the list' }).click();
-    await mine.page.getByRole('list', { name: 'Things to pack' }).getByText(item, { exact: true }).waitFor({ timeout: 15000 });
+    // The item's checkbox appears once it is on the list. (Its name is also in the Remove button's
+    // screen-reader text, so matching the text alone finds two elements.)
+    await mine.page.getByRole('checkbox', { name: new RegExp(`^${item}`) }).waitFor({ timeout: 15000 });
   }
   await mine.page.getByRole('checkbox', { name: /Warm jacket/ }).check();
   const barText = await mine.page.getByText('1 of 3 packed').waitFor({ timeout: 15000 }).then(() => true, () => false);
