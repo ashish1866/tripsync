@@ -83,13 +83,15 @@ code {
 }
 
 /* Reduced motion, as a safety net under every file's own calm version (and
-   library CSS such as Leaflet's): any animation or transition is over at once. */
+   library CSS such as Leaflet's): any animation is over at once, and there are
+   no transitions at all. (Shortening transitions instead would give every
+   property of every element a tiny transition, since the default is "all".) */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: var(--t-instant) !important;
     animation-iteration-count: 1 !important;
-    transition-duration: var(--t-instant) !important;
+    transition: none !important;
   }
 }

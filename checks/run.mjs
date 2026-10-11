@@ -6,6 +6,7 @@
 //   npm run check -- --look             (also save screenshots to judge the design)
 //   npm run check -- --db=tripsync      (the database the API under test uses, if not the one in server/.dev.vars)
 //   npm run check -- --delete-pool      (remove the fixed test accounts from Firebase and MongoDB, see below)
+//   npm run check -- --only=motion      (only the slop guard and one feature section, here the Motion one)
 //
 // What it does:
 //   0. Slop guard: banned design values in client/src and client/index.html (see slopGuard.mjs).
@@ -43,6 +44,9 @@ const args = process.argv.slice(2);
 const urlArg = args.find((a) => a.startsWith('--url='));
 const base = (urlArg ? urlArg.slice('--url='.length) : args.includes('--live') ? LIVE_URL : 'http://localhost:5173').replace(/\/+$/, '');
 const saveLook = args.includes('--look');
+// --only=motion runs the slop guard and that one feature section (by its name), skipping the rest.
+const onlyArg = args.find((a) => a.startsWith('--only='));
+const only = onlyArg ? onlyArg.slice('--only='.length).toLowerCase() : null;
 // The MongoDB database the check inspects directly (profiles, wipes). It MUST be the database the API under test uses:
 // by default the one in server/.dev.vars; name another with --db=tripsync (for example when Render's MONGODB_DB is not tripsync_dev).
 const dbArg = args.find((a) => a.startsWith('--db='));
@@ -401,7 +405,7 @@ try {
 
   // ====================== 1. Public pages ======================
   section = 'Public pages';
-  {
+  if (!only) {
     const { context, page, consoleErrors } = await openPage();
     await page.goto(base + '/', { waitUntil: 'networkidle' });
 
@@ -451,7 +455,7 @@ try {
 
   // ====================== 2. API guard (must fail) ======================
   section = 'API guard';
-  {
+  if (!only) {
     const ping = await call('GET', '/health/ping');
     record('GET /health/ping answers without the database', ping.status === 200 && ping.data?.status === 'ok' && !('mongo' in ping.data), `HTTP ${ping.status}`);
     const health = await call('GET', '/health');
@@ -485,7 +489,7 @@ try {
 
   // ====================== 3. Profile API with a real account ======================
   section = 'Profile API';
-  {
+  if (!only) {
     // A pool account that was wiped at the start of the run, so it has a Firebase
     // login but no TripSync profile yet (the "first login" case).
     const account = await poolSession('profile-check');
@@ -536,7 +540,7 @@ try {
 
   // ====================== 4. Timing ======================
   section = 'Timing';
-  {
+  if (!only) {
     const routes = [
       ['GET /api/health/ping (no database)', () => call('GET', '/health/ping')],
       ['GET /api/health (MongoDB ping)', () => call('GET', '/health')],
@@ -551,7 +555,7 @@ try {
 
   // ====================== 5. Sign-up / log-in story in the browser ======================
   section = 'Browser story';
-  {
+  if (!only) {
     const account = newAccount('web');
     const name = 'Ashish Bisht';
     const { context, page, consoleErrors } = await openPage();
@@ -673,6 +677,7 @@ try {
     saveLook,
     overflowOf,
     hasError,
+    only,
   });
 } catch (err) {
   record('The check itself ran to the end', false, err.stack?.split('\n').slice(0, 2).join(' ') ?? String(err));

@@ -2,7 +2,7 @@
 // Each section uses its own throwaway accounts (made through ctx.newUser, so the
 // clean-up in run.mjs deletes them and everything they own).
 //
-// ctx: { base, call, record, setSection, newUser, limiter, db, openPage, PHONE, shot, saveLook, overflowOf, hasError, login }
+// ctx: { base, call, record, setSection, newUser, limiter, db, openPage, PHONE, shot, saveLook, overflowOf, hasError, login, only }
 // newUser(tag, name) gives a pool account (the same person for the same name in every section; its data is wiped before and after the run).
 
 import { ObjectId } from 'mongodb';
@@ -32,7 +32,7 @@ export async function addMember(ctx, tripId, user, role) {
   await ctx.db.collection('trips').updateOne({ _id: new ObjectId(tripId) }, { $push: { members: { uid: user.uid, role, joinedAt: new Date() } } });
 }
 
-const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks, exploreChecks, packingChecks, extrasChecks];
+const sections = [tripsChecks, itineraryChecks, weatherChecks, membersChecks, moneyChecks, exploreChecks, packingChecks, extrasChecks, motionChecks];
 
 // ====================== Step 9: best order, bill filters and paging ======================
 async function extrasChecks(ctx) {
@@ -1246,7 +1246,10 @@ async function itineraryChecks(ctx) {
 }
 
 export async function runFeatureChecks(ctx) {
-  for (const section of sections) {
+  // --only=motion: just the section whose function name starts with it (motionChecks).
+  const chosen = ctx.only ? sections.filter((s) => s.name.toLowerCase().startsWith(ctx.only)) : sections;
+  if (ctx.only && !chosen.length) ctx.record(`--only=${ctx.only} names a feature section`, false, `sections: ${sections.map((s) => s.name).join(', ')}`);
+  for (const section of chosen) {
     try {
       await section(ctx);
     } catch (err) {
@@ -1451,17 +1454,435 @@ async function tripsChecks(ctx) {
   record('Phone width, the trip page: no sideways scrolling', extra <= 0, `${extra}px`);
   if (ctx.saveLook) await ctx.shot(phone.page, 'trip-phone');
   await phone.context.close();
+  // (The /status "still checking" mark is checked with and without reduced motion in the Motion section.)
+}
 
-  // /status: the turning "still checking" mark stands still with reduced motion
-  const calm = await ctx.openPage(undefined, undefined, { reducedMotion: 'reduce' });
-  await calm.page.route('**/api/health/ping', async (route) => {
-    await new Promise((r) => setTimeout(r, 2500));
+// ====================== Step 11: motion ======================
+// Every animation is checked in a real browser twice. With motion on: that it
+// really runs, starts from the user's action (never on page load) and moves
+// only transform and opacity. With prefers-reduced-motion: that its calm
+// version is used (it stands still, is instant, or is a plain fade). Plus frame
+// timing in a laptop window, and in a 390 px window with the CPU slowed 4 times.
+
+// Runs inside the page (added before any page script): records every CSS
+// animation and transition that starts, and every animation started from
+// script, with the properties it moves and how long it lasts.
+function recordMotion() {
+  window.__motion = [];
+  const describe = (anim) => {
+    const effect = anim?.effect;
+    const frames = effect?.getKeyframes?.() ?? [];
+    const props = [...new Set(frames.flatMap((k) => Object.keys(k).filter((p) => !['offset', 'computedOffset', 'easing', 'composite'].includes(p))))];
+    const timing = effect?.getComputedTiming?.();
+    return { props, duration: Number(timing?.duration) || 0, loops: timing?.iterations === Infinity, first: frames[0] ? JSON.stringify(frames[0]) : '' };
+  };
+  const classOf = (el) => (typeof el?.className === 'string' ? el.className : (el?.className?.baseVal ?? ''));
+  const find = (e, match) => document.getAnimations().find((a) => a.effect?.target === e.target && (a.effect.pseudoElement || '') === (e.pseudoElement || '') && match(a));
+  document.addEventListener(
+    'animationstart',
+    (e) => window.__motion.push({ type: 'css', name: e.animationName, pseudo: e.pseudoElement || '', cls: classOf(e.target), ...describe(find(e, (a) => a.animationName === e.animationName)) }),
+    true,
+  );
+  document.addEventListener(
+    'transitionrun',
+    (e) => window.__motion.push({ type: 'transition', name: e.propertyName, pseudo: e.pseudoElement || '', cls: classOf(e.target), ...describe(find(e, (a) => a.transitionProperty === e.propertyName)), props: [e.propertyName] }),
+    true,
+  );
+  const animate = Element.prototype.animate;
+  Element.prototype.animate = function (keyframes, options) {
+    const anim = animate.call(this, keyframes, options);
+    window.__motion.push({ type: 'script', name: anim.id || '', pseudo: '', cls: classOf(this), ...describe(anim) });
+    return anim;
+  };
+}
+
+// Frame gaps while `action` runs: { frames, p95, max } in ms.
+async function frameGaps(page, action, ms = 900) {
+  const sampling = page.evaluate(
+    (ms) =>
+      new Promise((resolve) => {
+        const times = [];
+        const start = performance.now();
+        const tick = (now) => {
+          times.push(now);
+          if (now - start < ms) requestAnimationFrame(tick);
+          else resolve(times);
+        };
+        requestAnimationFrame(tick);
+      }),
+    ms,
+  );
+  await action();
+  const times = await sampling;
+  const gaps = times
+    .slice(1)
+    .map((t, i) => t - times[i])
+    .sort((a, b) => a - b);
+  return { frames: gaps.length, p95: Math.round(gaps[Math.floor(gaps.length * 0.95)] ?? 0), max: Math.round(gaps.at(-1) ?? 0) };
+}
+
+const trackTransforms = (scope) => scope.evaluate((el) => [...el.querySelectorAll('[class*="track"]')].map((t) => getComputedStyle(t).transform));
+
+async function motionChecks(ctx) {
+  const { call, record } = ctx;
+  ctx.setSection('Motion');
+
+  const owner = await ctx.newUser('motion', 'Ashish Bisht');
+  const trip = await makeTrip(ctx, owner, { days: 3 });
+  const t = `/trips/${trip.id}`;
+  const spot = (name, lng, lat) => ({ name, address: 'Manali, Himachal Pradesh', location: [lng, lat], placeId: `check-${name.replace(/\W/g, '')}` });
+  // Day 1 in a wasteful order, so the best order moves stops.
+  for (const [title, lng, lat] of [['Mall Road', 77.1892, 32.2432], ['Solang Valley', 77.1566, 32.3161], ['Hadimba Temple', 77.1808, 32.2484]]) {
+    await call('POST', `${t}/days/1/activities`, { token: owner.token, body: { title, place: spot(title, lng, lat) } });
+  }
+  await call('POST', `${t}/days/2/activities`, { token: owner.token, body: { title: 'Rest day' } });
+  for (const text of ['Warm jacket', 'Power bank']) await call('POST', `${t}/checklist`, { token: owner.token, body: { text } });
+
+  // Outside services are answered by the check itself, so this section never spends Geoapify calls.
+  const VASHISHT = spot('Vashisht Temple', 77.1855, 32.2675);
+  const fakeSpots = (route) => route.fulfill({ json: { results: [VASHISHT] } });
+  const FAKE_PLACES = {
+    places: [
+      { placeId: 'check-cafe-1', name: 'Check Cafe One', address: 'Old Manali', location: [77.183, 32.256], distance: 900 },
+      { placeId: 'check-cafe-2', name: 'Check Cafe Two', address: 'Mall Road', location: [77.189, 32.244], distance: 1500 },
+    ],
+    source: 'geoapify',
+  };
+  const slowPlaces = async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fulfill({ json: FAKE_PLACES });
+  };
+  const isPlaces = (url) => /\/api\/trips\/[^/]+\/places/.test(url.pathname);
+
+  const all = [];
+  const take = async (page) => {
+    const got = await page.evaluate(() => window.__motion.splice(0));
+    all.push(...got);
+    return got;
+  };
+  const ours = (list) => list.filter((m) => !/leaflet/.test(m.cls));
+  const LOADER = /appear|pull-away|slide/;
+  const moving = (list) => ours(list).filter((m) => m.duration > 1 && m.props.includes('transform'));
+  const summary = (list) => list.map((m) => `${m.type}:${m.name.replace(/^_|_[\w-]+_\d+$/g, '')}${m.pseudo}`).join(', ') || 'nothing moved';
+  const dayStone = (page, n) => page.getByRole('button', { name: new RegExp(`^Day ${n}\\b`) });
+  const dayTitle = (page, n) => page.getByRole('heading', { name: new RegExp(`^Day ${n},`) });
+  const tab = (page, name) => page.getByRole('navigation', { name: 'Trip sections' }).getByRole('link', { name, exact: true });
+  const currentCapOrigin = (page) => page.evaluate(() => getComputedStyle(document.querySelector('nav[aria-label="Trip sections"] a[aria-current="page"]'), '::before').transformOrigin);
+  const packing = (page) => page.getByRole('list', { name: 'Things to pack' });
+  const packItem = (page, text) => packing(page).getByRole('listitem').filter({ hasText: text });
+
+  // ---------- with motion ----------
+  {
+    const { context, page, consoleErrors } = await ctx.openPage();
+    await context.addInitScript(recordMotion);
+    await ctx.login(page, owner);
+    await page.route('**/api/geo/spots**', fakeSpots);
+
+    await page.goto(`${ctx.base}${t}`, { waitUntil: 'networkidle' });
+    await page.getByRole('list', { name: 'Days of the trip' }).waitFor();
+    await page.waitForTimeout(700);
+    const overviewLoad = ours(await take(page)).filter((m) => !LOADER.test(m.name));
+    record("Opening a trip: nothing of TripSync's own moves on page load (only a loader, if the wait is long)", overviewLoad.length === 0, summary(overviewLoad));
+
+    await page.goto(`${ctx.base}${t}/plan?day=1`, { waitUntil: 'networkidle' });
+    const stops = page.getByRole('list', { name: 'Stops on Day 1' });
+    await stops.waitFor();
+    await page.waitForTimeout(700);
+    const planLoad = ours(await take(page)).filter((m) => !LOADER.test(m.name));
+    record('Opening the day plan: nothing moves on page load either', planLoad.length === 0, summary(planLoad));
+    const mapMoves = await page.locator('.leaflet-container').first().evaluate((el) => el.classList.contains('leaflet-fade-anim'));
+    record("With motion on, the map keeps Leaflet's own zoom and tile fade", mapMoves);
+
+    // Picking a day: painted stone, stops travelling in from the side you moved to
+    await dayStone(page, 2).click();
+    await dayTitle(page, 2).waitFor();
+    await page.waitForTimeout(300);
+    const pick = await take(page);
+    const painted = pick.find((m) => /paint-up/.test(m.name) && m.pseudo === '::before');
+    const travelled = pick.find((m) => m.type === 'script' && m.name === 'ts-travel');
+    record('Picking Day 2: its stone is painted yellow from the base up', Boolean(painted) && painted.props.join() === 'transform', summary(pick));
+    record("...and the day's stops travel in from the right (forward along the road)", /translateX\(24px\)/.test(travelled?.first ?? '') && travelled.props.includes('opacity'), travelled?.first ?? summary(pick));
+    await dayStone(page, 1).click();
+    await dayTitle(page, 1).waitFor();
+    await page.waitForTimeout(300);
+    const back = (await take(page)).find((m) => m.name === 'ts-travel');
+    record('Going back to Day 1: the stops come in from the left', /translateX\(-24px\)/.test(back?.first ?? ''), back?.first ?? 'no travel');
+
+    // Best order: the stops that moved slide to their new places
+    await page.getByRole('button', { name: 'Suggest the nearest-first order' }).click();
+    const useIt = page.getByRole('button', { name: 'Use this order' });
+    const offered = await useIt.waitFor({ timeout: 15000 }).then(() => true, () => false);
+    const orderBefore = await stops.getByRole('heading', { level: 3 }).allInnerTexts();
+    await take(page);
+    if (offered) await useIt.click();
+    await page
+      .waitForFunction((before) => [...(document.querySelector('[aria-label="Stops on Day 1"]')?.querySelectorAll('h3') ?? [])].map((h) => h.innerText).join('|') !== before, orderBefore.join('|'), { timeout: 15000 })
+      .catch(() => {});
+    await page.waitForTimeout(100);
+    const shifts = (await take(page)).filter((m) => m.name === 'ts-shift');
+    const orderAfter = await stops.getByRole('heading', { level: 3 }).allInnerTexts();
+    record('"Use this order": each stop that moved slides from its old place to its new one', shifts.length >= 2 && shifts.every((m) => m.props.join() === 'transform'), `${shifts.length} slides; ${orderBefore.join(' > ')} became ${orderAfter.join(' > ')}`);
+
+    // Dialog: the band is painted across as the board appears
+    await take(page);
+    await page.getByRole('button', { name: 'Remove Mall Road' }).click();
+    await page.getByRole('dialog').waitFor();
+    await page.waitForTimeout(300);
+    const dialog = await take(page);
+    const band = dialog.find((m) => /paint-across/.test(m.name) && m.pseudo === '::before');
+    record('A question before removing a stop: its red band is painted across as the board fades in', Boolean(band) && dialog.some((m) => /board-in/.test(m.name)), summary(dialog));
+    const focusSafe = await page.evaluate(() => document.activeElement?.textContent?.trim());
+    record('...and "Keep it" has the focus at once, while the band is still being painted', focusSafe === 'Keep it', `focused "${focusSafe}"`);
+    await page.getByRole('button', { name: 'Keep it' }).click();
+
+    // A new stop with a place: the button waits before its road line shows, then wet paint and a planted stone
+    await page.route(`**/api${t}/days/1/activities`, async (route) => {
+      if (route.request().method() === 'POST') await new Promise((r) => setTimeout(r, 1200));
+      await route.continue();
+    });
+    await page.getByRole('combobox', { name: 'Place' }).fill('Vash');
+    await page.getByRole('option', { name: /Vashisht Temple/ }).click();
+    await take(page);
+    await page.getByRole('button', { name: 'Add to Day 1' }).click();
+    const dashes = page.locator('button[aria-busy="true"] [class*="track"]').first();
+    await page.waitForTimeout(150);
+    const early = await dashes.evaluate((el) => getComputedStyle(el).opacity).catch(() => 'no working button');
+    await page.waitForTimeout(700);
+    const later = await dashes.evaluate((el) => [getComputedStyle(el).opacity, getComputedStyle(el).transform]).catch(() => ['no working button', '']);
+    await page.waitForTimeout(150);
+    const later2 = await dashes.evaluate((el) => getComputedStyle(el).transform).catch(() => '');
+    record('A working button waits before showing its road line (a quick save never flashes it)', early === '0', `opacity ${early} after 150 ms`);
+    record('...then the line shows and pulls away', later[0] === '1' && later[1] !== later2, `opacity ${later[0]}; ${later[1]} then ${later2}`);
+    await stops.getByRole('heading', { name: 'Vashisht Temple' }).waitFor({ timeout: 15000 });
+    await page.waitForTimeout(400);
+    const added = await take(page);
+    const rose = added.find((m) => /rise/.test(m.name) && /ts-pin-planted/.test(m.cls));
+    record("The new stop's row gets wet paint down its edge", added.some((m) => /ts-paint-down/.test(m.name) && /ts-wet/.test(m.cls)), summary(added));
+    record('...and its stone rises out of the ground on the map', Boolean(rose) && rose.props.join() === 'transform', summary(added));
+    await page.unroute(`**/api${t}/days/1/activities`);
+
+    // Tabs: the cap is painted in the direction you moved
+    await take(page);
+    await tab(page, 'Packing').click();
+    await packing(page).waitFor();
+    await page.waitForTimeout(300);
+    const toRight = await take(page);
+    const rightOrigin = await currentCapOrigin(page);
+    record('Moving right along the tabs: the yellow cap is painted on, left to right', toRight.some((m) => /paint-across/.test(m.name) && m.pseudo === '::before') && rightOrigin.startsWith('0px'), `${summary(toRight)}; origin ${rightOrigin}`);
+
+    // Packing: tick, the strip's edge, wet paint, closing the gap
+    await clickItem(page, 'Warm jacket');
+    await page.waitForTimeout(450);
+    const ticked = await take(page);
+    const ink = ticked.some((m) => m.type === 'transition' && m.name === 'transform' && m.pseudo === '::before');
+    const stamp = ticked.some((m) => m.type === 'transition' && m.name === 'opacity' && m.pseudo === '::after');
+    record('Ticking an item: the ink is painted in, then the tick is stamped on', ink && stamp, summary(ticked));
+    record("...and the packed strip's paint edge slides to the new share", ticked.some((m) => m.type === 'transition' && m.name === 'transform' && /fill/.test(m.cls)), summary(ticked));
+    await page.getByLabel('Add an item').fill('Rain jacket');
+    await page.getByRole('button', { name: 'Add to the list' }).click();
+    await packItem(page, 'Rain jacket').waitFor({ timeout: 15000 });
+    await page.waitForTimeout(300);
+    const addedItem = await take(page);
+    record('Adding "Rain jacket": its row gets wet paint', addedItem.some((m) => /ts-paint-down/.test(m.name) && /ts-wet/.test(m.cls)), summary(addedItem));
+    await page.getByRole('button', { name: 'Remove Power bank' }).click();
+    await packItem(page, 'Power bank').waitFor({ state: 'detached', timeout: 15000 });
+    await page.waitForTimeout(100);
+    const closed = (await take(page)).filter((m) => m.name === 'ts-shift');
+    record('Removing "Power bank": the row below slides up to close the gap', closed.length >= 1, `${closed.length} slides`);
+
+    // Members: a plate painted on, wet paint on a new link
+    await tab(page, 'Members').click();
+    const plates = page.getByRole('group', { name: 'They join as' });
+    await plates.waitFor();
+    await page.waitForTimeout(300);
+    await take(page);
+    await plates.getByText('Viewer', { exact: true }).click();
+    await page.waitForTimeout(300);
+    const chose = await take(page);
+    record('Choosing "Viewer": the plate\'s yellow is painted on, left to right', chose.some((m) => m.type === 'transition' && m.name === 'transform' && m.pseudo === '::before' && /face/.test(m.cls)), summary(chose));
+    await page.getByRole('button', { name: 'Make a Viewer link' }).click();
+    await page.getByRole('list', { name: 'Invite links that still work' }).waitFor({ timeout: 15000 });
+    await page.waitForTimeout(300);
+    const link = await take(page);
+    record('Making a link: the new link gets wet paint', link.some((m) => /ts-paint-down/.test(m.name) && /ts-wet/.test(m.cls)), summary(link));
+
+    // Explore: the loader waits, the picked row's band is painted down, the cap comes from the right
+    await page.route(isPlaces, slowPlaces);
+    await tab(page, 'Explore').click();
+    const loader = page.getByRole('status').filter({ hasText: 'Looking for' });
+    await loader.waitFor();
+    await page.waitForTimeout(100);
+    const loaderEarly = await loader.evaluate((el) => getComputedStyle(el).opacity).catch(() => 'gone');
+    await page.waitForTimeout(700);
+    const loaderLater = await loader.evaluate((el) => getComputedStyle(el).opacity).catch(() => 'gone');
+    record('A loading strip waits before it shows (a quick answer never flashes it)', loaderEarly === '0' && loaderLater === '1', `opacity ${loaderEarly} at about 100 ms, ${loaderLater} at about 800 ms`);
+    const leftOrigin = await currentCapOrigin(page);
+    record('Moving left along the tabs: the cap is painted on from the right', !leftOrigin.startsWith('0px'), `origin ${leftOrigin}`);
+    const cafe = page.getByRole('button', { name: 'Check Cafe One', exact: true });
+    await cafe.waitFor({ timeout: 15000 });
+    await take(page);
+    await cafe.click();
+    await page.waitForTimeout(300);
+    const picked = await take(page);
+    record('Picking a place: the yellow band is painted down its row', picked.some((m) => /paint-down/.test(m.name) && m.pseudo === '::after'), summary(picked));
+
+    // Smoothness: two day changes in a laptop window
+    await tab(page, 'Day plan').click();
+    await stops.waitFor();
+    await page.waitForTimeout(500);
+    const laptop = await frameGaps(page, async () => {
+      await dayStone(page, 2).click();
+      await page.waitForTimeout(300);
+      await dayStone(page, 3).click();
+    });
+    record(`Laptop window (1280 px), two day changes: frames stay smooth (95% within ${laptop.p95} ms, longest ${laptop.max} ms, ${laptop.frames} frames)`, laptop.p95 <= 34, JSON.stringify(laptop));
+
+    const wrong = ours(all).filter((m) => m.props.some((p) => !['transform', 'opacity'].includes(p)));
+    record(`Every animation TripSync started moved only transform and opacity (${ours(all).length} seen)`, ours(all).length > 0 && wrong.length === 0, summary(wrong));
+    const loops = ours(all).filter((m) => m.loops && !/slide/.test(m.name));
+    record('Nothing loops except the road dash', loops.length === 0, summary(loops));
+    record('No script errors while animating', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+    await context.close();
+  }
+
+  // ---------- /status, with motion ----------
+  const slowPing = async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
     await route.continue();
-  });
-  await calm.page.goto(`${ctx.base}/status`);
-  const mark = calm.page.locator('li', { hasText: 'API' }).first().locator('span[aria-hidden="true"]');
-  await mark.waitFor({ timeout: 5000 });
-  const anim = await mark.evaluate((el) => getComputedStyle(el).animationName);
-  record('/status: the "still checking" mark stands still with reduced motion', anim === 'none', `animation "${anim}"`);
-  await calm.context.close();
+  };
+  {
+    const { context, page } = await ctx.openPage();
+    await context.addInitScript(recordMotion);
+    await page.route('**/api/health/ping', slowPing);
+    await page.goto(`${ctx.base}/status`);
+    const apiRow = page.locator('li', { hasText: 'API' }).first();
+    await apiRow.locator('[class*="track"]').first().waitFor();
+    await page.waitForTimeout(300);
+    const a = await trackTransforms(apiRow);
+    await page.waitForTimeout(150);
+    const b = await trackTransforms(apiRow);
+    record('/status: while a check runs, the dashes of its outline run round it', a.length === 4 && a.some((v, i) => v !== b[i]), `${a.length} edges; ${a[0]} then ${b[0]}`);
+    await apiRow.getByText(/Answered in/).waitFor({ timeout: 60000 });
+    await page.waitForTimeout(300);
+    const arrived = await take(page);
+    record('...and when the API answers, its square is painted solid', arrived.some((m) => /paint-up/.test(m.name)), summary(arrived));
+    await context.close();
+  }
+
+  // ---------- with reduced motion ----------
+  {
+    const { context, page, consoleErrors } = await ctx.openPage(undefined, undefined, { reducedMotion: 'reduce' });
+    await context.addInitScript(recordMotion);
+    await ctx.login(page, owner);
+    await page.goto(`${ctx.base}${t}/plan?day=1`, { waitUntil: 'networkidle' });
+    await page.getByRole('list', { name: 'Stops on Day 1' }).waitFor();
+    await page.waitForTimeout(500);
+    await take(page);
+    const mapStill = await page.locator('.leaflet-container').first().evaluate((el) => !el.classList.contains('leaflet-fade-anim'));
+    record("Reduced motion: the map's own fades and zoom animation are off", mapStill);
+
+    await dayStone(page, 2).click();
+    await dayTitle(page, 2).waitFor();
+    await page.waitForTimeout(300);
+    const calmPick = await take(page);
+    const calmTravel = calmPick.find((m) => m.name === 'ts-travel');
+    record('Reduced motion, picking Day 2: nothing slides and no paint stroke; the stops arrive with a plain fade', moving(calmPick).length === 0 && calmTravel?.props.join() === 'opacity', summary(calmPick));
+
+    await dayStone(page, 1).click();
+    await dayTitle(page, 1).waitFor();
+    await page.waitForTimeout(300);
+    await take(page);
+    await page.getByRole('button', { name: /^Remove / }).first().click();
+    await page.getByRole('dialog').waitFor();
+    await page.waitForTimeout(300);
+    const calmDialog = await take(page);
+    record('Reduced motion, a dialog: the board and its band are simply there', !ours(calmDialog).some((m) => m.type === 'transition' || m.duration > 1), summary(calmDialog));
+    await page.getByRole('button', { name: 'Keep it' }).click();
+
+    await take(page);
+    await tab(page, 'Packing').click();
+    await packing(page).waitFor();
+    await page.waitForTimeout(300);
+    const calmTab = await take(page);
+    record('Reduced motion, changing tab: the cap is simply there', !ours(calmTab).some((m) => m.type === 'transition' || m.duration > 1), summary(calmTab));
+    await clickItem(page, 'Rain jacket');
+    await page.waitForTimeout(400);
+    const calmTick = await take(page);
+    record('Reduced motion, ticking: the ink, the tick and the strip are simply there; the press still shows', !ours(calmTick).some((m) => m.type === 'transition' || m.duration > 1), summary(calmTick));
+    await page.getByLabel('Add an item').fill('Sun cream');
+    await page.getByRole('button', { name: 'Add to the list' }).click();
+    const sunCream = packItem(page, 'Sun cream');
+    await sunCream.waitFor({ timeout: 15000 });
+    await page.waitForTimeout(150);
+    const bandNow = await sunCream.evaluate((el) => getComputedStyle(el, '::after').opacity);
+    const calmWet = await take(page);
+    await page.waitForTimeout(1700);
+    const dried = (await take(page)).find((m) => /ts-dry/.test(m.name));
+    record(
+      'Reduced motion, a new item: no paint stroke; its wet band is simply there, then fades away (a plain fade)',
+      !calmWet.some((m) => /ts-paint-down/.test(m.name) && m.duration > 1) && bandNow === '1' && dried?.duration >= 500 && dried.props.join() === 'opacity',
+      `band opacity ${bandNow}; ${summary(calmWet)}; then ${dried ? `${dried.name} ${Math.round(dried.duration)} ms` : 'no fade'}`,
+    );
+
+    await page.route(isPlaces, slowPlaces);
+    await tab(page, 'Explore').click();
+    const loader = page.getByRole('status').filter({ hasText: 'Looking for' });
+    await loader.waitFor();
+    await page.waitForTimeout(700);
+    const a = await trackTransforms(loader);
+    await page.waitForTimeout(200);
+    const b = await trackTransforms(loader);
+    record("Reduced motion: the loading strip's dashes stand still", a.length > 0 && a.every((v, i) => v === b[i]), `${a[0]} then ${b[0]}`);
+    record('No script errors with reduced motion', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+    await context.close();
+  }
+
+  // ---------- /status, with reduced motion ----------
+  {
+    const { context, page } = await ctx.openPage(undefined, undefined, { reducedMotion: 'reduce' });
+    await context.addInitScript(recordMotion);
+    await page.route('**/api/health/ping', slowPing);
+    await page.goto(`${ctx.base}/status`);
+    const apiRow = page.locator('li', { hasText: 'API' }).first();
+    await apiRow.locator('[class*="track"]').first().waitFor();
+    await page.waitForTimeout(300);
+    const a = await trackTransforms(apiRow);
+    await page.waitForTimeout(200);
+    const b = await trackTransforms(apiRow);
+    record('Reduced motion, /status: the checking outline stands still (still dashed, so still readable as "checking")', a.length === 4 && a.every((v, i) => v === b[i]), `${a[0]} then ${b[0]}`);
+    await apiRow.getByText(/Answered in/).waitFor({ timeout: 60000 });
+    await page.waitForTimeout(300);
+    const arrived = await take(page);
+    record('...and the answer simply appears', !arrived.some((m) => m.duration > 1), summary(arrived));
+    await context.close();
+  }
+
+  // ---------- smoothness at phone width, CPU slowed 4 times ----------
+  // The same two day changes with motion and with reduced motion (no animation):
+  // the long frames of redrawing a day happen either way, so the fair question
+  // is how much the motion adds on top.
+  const phoneRun = async (options) => {
+    const { context, page } = await ctx.openPage(...ctx.PHONE, options);
+    await ctx.login(page, owner);
+    await page.goto(`${ctx.base}${t}/plan?day=1`, { waitUntil: 'networkidle' });
+    await page.getByRole('list', { name: 'Stops on Day 1' }).waitFor();
+    await page.waitForTimeout(500);
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const gaps = await frameGaps(page, async () => {
+      await dayStone(page, 2).click();
+      await page.waitForTimeout(300);
+      await dayStone(page, 3).click();
+    });
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    await context.close();
+    return gaps;
+  };
+  const withMotion = await phoneRun({});
+  const without = await phoneRun({ reducedMotion: 'reduce' });
+  record(
+    `Phone window (${ctx.PHONE[0]} px), CPU slowed 4 times, two day changes: 95% of frames within ${withMotion.p95} ms with motion, ${without.p95} ms without (longest ${withMotion.max} / ${without.max} ms)`,
+    withMotion.p95 <= without.p95 + 17,
+    `motion adds more than one frame: ${JSON.stringify({ withMotion, without })}`,
+  );
 }
