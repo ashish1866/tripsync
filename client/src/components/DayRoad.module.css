@@ -92,7 +92,7 @@
   z-index: -1;
   background: var(--cap);
   transform-origin: bottom;
-  animation: paint-up var(--t-paint) var(--ease-brush) both;
+  animation: paint-up var(--t-paint) var(--ease-brush) backwards;
 }
 
 @keyframes paint-up {

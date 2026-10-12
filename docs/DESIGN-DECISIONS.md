@@ -54,6 +54,7 @@ The landing page does not use the hero template. It opens with a left-aligned st
 ## 6. Default-ban items used, with reasons
 
 - **D10, uppercase:** Place names and day markers painted on stones use condensed uppercase, because that is how real milestones are lettered. The TRIPSYNC wordmark uses the same lettering because it is the name on the stone. Uppercase is used only on stone lettering, never for small label text above headings.
+- **Animation beyond the road-dash loader** (Step 11): each animation, what it tells the user and its calm version is written in "Motion" below.
 - None other. (A hard ink offset edge on buttons and boards was used in Steps 0 and 1. It was close to D4's "brutalist costume", and Ashish had it removed: see "Surfaces and buttons" below.)
 
 ## Surfaces and buttons (decided by Ashish, Step 1.5)
@@ -64,9 +65,9 @@ The only heavy line left is the 6px base under each kilometre stone. It is part 
 
 Buttons are flat painted plates with the same 2px outline:
 - **Hover:** the outline gets heavier (2px to 4px). Nothing moves.
-- **Pressed:** the fill darkens (deeper yellow, or a slightly darker plate) and the button moves down 1px.
+- **Pressed:** the fill darkens (deeper yellow, or a slightly darker plate) and the button moves down 1px, at once, coming back up a little slower (see "Motion").
 - **Focus:** the same double ring as every other control.
-- **Working:** stays solid and shows the moving road dash along its bottom.
+- **Working:** stays solid and, once the wait passes 0.4 s, shows the moving road dash along its bottom.
 - **Disabled:** faded, no hover change.
 
 How these are drawn (Step 1.6), so the slop guard can hold the "no shadows" rule:
@@ -83,11 +84,66 @@ How these are drawn (Step 1.6), so the slop guard can hold the "no shadows" rule
 - The map sits in the same 2px ink frame as every board. Zoom buttons are repainted as stone plates with the shared hover and focus states. The attribution "© OpenStreetMap contributors" stays visible bottom right, on a stone strip.
 - Scroll-wheel zoom is off, so scrolling the page on a laptop does not get stuck inside the map.
 
-## Motion in use
+## Motion (Step 11, asked for by Ashish)
 
-Only two things move, and both mean "still working":
-- The road-dash line (loading strip, working button).
-- The turning dashed square on `/status` (since Step 0). Reason: that page lists several checks that finish at different times; a mark that keeps turning says "this one is still running" without a spinner or a line of text per row, and stops being a question the moment the solid square (passed) or red triangle (failed) replaces it. It turns a quarter turn on a loop, 1.6 s, linear. Under `prefers-reduced-motion` it stands still as a plain dashed square (proved by the browser check with reduced motion on).
+The idea: motion in TripSync is what happens on a road. A bus moving, a plate pressed, a fresh coat of paint, paint still wet, stones standing in a new place. Each one means one thing, everywhere it appears, and nothing else moves.
+
+The rules every animation follows:
+- **It answers you.** Motion plays because you did something (picked a day, ticked an item, added a bill) or because what you asked for arrived. Nothing plays when a page opens: no entrance, no stagger, no scroll reveal.
+- **Only transform and opacity move**, so nothing reflows while it moves and the layout never shifts under your finger.
+- **Nothing makes you wait.** Every control works while it is moving; focus lands at once (a dialog's "Keep it" is focused while its band is still being painted). The longest motion that is part of an action is 280 ms. Wet paint lasts 2 s but blocks nothing.
+- **One loop only:** the road dash, which means "still working". Nothing else repeats, pulses or shimmers.
+- **No bounce.** The four easings are named for what they are: `--ease-road` (constant speed, the road passing), `--ease-pull-away` (a bus pulling away: speeds up evenly, then cruises), `--ease-brush` (a firm start that eases off as the paint runs out), `--ease-settle` (something heavy coming to rest). None overshoots, and the slop guard fails any easing that does.
+- **Timings are named by meaning** in `tokens.css` (`--t-press`, `--t-paint`, `--t-travel`, `--t-shift`, `--t-plant`, `--t-wet`...), so a paint stroke is the same length everywhere and different from a press. No component holds a raw duration; the slop guard fails one.
+- **Reduced motion** (`prefers-reduced-motion: reduce`): every animation has its own calm version, written next to it, listed below, and checked in a real browser by the Motion section of the check. Under it, `global.css` also ends any animation at once and removes transitions altogether, as a safety net for library CSS.
+- **No new dependency.** CSS does nearly everything; the three motions that need JavaScript (travelling, sliding rows, and reading timings from the tokens) live in `client/src/utils/motion.js`, about 100 lines, using the browser's own `element.animate()`. A motion library would add weight to do what the browser already does, and its defaults would be someone else's style.
+
+### What moves, what it tells you, and what it replaced
+
+**1. The road dash: "still working".** Loading strip, a working button, the `/status` checking mark.
+- A loader or a working button's line shows only after **0.4 s** (`--t-wait`). A quick answer (5 to 40 ms on this PC, about 370 ms live) shows nothing at all, instead of flashing a strip for a frame. Screen readers get the "Loading the trip" sentence at once; it is only invisible, not absent.
+- Then the dashes **pull away**: from standing still they speed up evenly over one dash plus one gap (twice one slide's time, 1.4 s on the strip and 1.2 s on a button) and reach cruising speed exactly as the steady slide takes over, so there is no lurch. Like a bus leaving a stop.
+- Replaced: dashes at full speed from the first frame, shown the instant a wait began.
+- Calm: the same wait (it is not motion), then the dashes stand still.
+
+**2. The `/status` checking mark: an unpainted outline whose dashes run round it.** Each edge is a strip of road dash, all four running clockwise, so the mark says "still checking" in the same language as every other wait. When the answer arrives, a passed check's square is **painted solid**, base to top, in one stroke; a failed check's **warning sign is put up** from its base (it rises a little and fades in, 240 ms). Only a row that was checking gets that arrival; "Website" is passed from the start.
+- Replaced: the dashed square turning a quarter turn every 1.6 s, linear (it read as a generic spinner, and the result replaced it with no change in between).
+- Calm: the dashed outline stands still (still dashed, so still readable as "checking"); the result simply appears.
+
+**3. Pressed plates: "your press landed".** Buttons, day stones, the trip rows on Your trips, choice plates and packing tick boxes go down 1 px in **50 ms** and come back up in **150 ms**: at once under the finger, a little slower on the way back, like a sprung metal plate. The darker paint of a pressed button changes instantly.
+- Replaced: 120 ms both ways on buttons and day stones only, with a background-colour transition (not transform or opacity). Trip rows, choice plates and tick boxes had no pressed state, which design.md asks for on every control.
+- Calm: the 1 px press and the darker paint stay; there is no transition.
+
+**4. A fresh coat of paint: "this is now chosen, or done".** One brush stroke, **180 ms**, always in a direction that means something. Taking paint off is always instant: only the new state is drawn.
+- **The tab cap** is painted onto the new tab in the direction you moved (left to right if the new tab is to the right of the old one).
+- **The day stone you pick** is painted yellow from its base up: "like a stone freshly painted", as Step 3 described it. The day already chosen when the page opens is simply yellow.
+- **A choice plate** (invite role, bill split, Explore category) is painted yellow left to right.
+- **A packing tick:** the ink is painted in from the bottom of the box, and the tick is stamped on (50 ms) as the stroke finishes. The real checkbox changes at once. Unticking is instant.
+- **A role plate** (Make viewer / Make editor) is repainted in ink left to right; the new word appears as the ink passes under it, like a sign painter redoing a plate.
+- **The place you pick in Explore:** its yellow band is painted down its edge. The list still jumps to the row (a smooth scroll of unknown length is motion you wait out); the moving paint is what your eye lands on.
+- **A dialog's band** is painted across while the board fades in (160 ms). The colour is the message (red: this destroys something; yellow: check before you confirm), so it is the thing that moves first.
+- Replaced: every one of these appeared at once.
+- Calm: the paint is simply there.
+
+**5. Wet paint: "this is the one you just added".** The new row gets a cap-yellow band down its left edge, painted down in one stroke, wet for **1.4 s**, then it dries away over **0.6 s** and the row looks exactly as before. On: a packing item, a stop, a bill, a payment marked as paid, an invite link. A stop goes in by its time and a bill by its date, so the new row is not always at the end of the list; this is how you find it. Only your own additions get it (each page keeps the id the server returned for what it just added); never rows that were already there, never on page load, and changing page or filter in the bills clears it.
+- Replaced: new rows appeared unmarked.
+- Calm: no stroke. The band is there at once and then fades away: a plain fade, which is why its timings are not zeroed under reduced motion.
+
+**6. Moving along the road: "things changed place".**
+- **Travelling between days** (Day plan): the day's stops arrive from the right when you go forward (Day 2 to Day 3) and from the left when you go back, 24 px and **220 ms**, like the view from a bus window. The map and the day stones stay put. Calm: a plain fade, 150 ms.
+- **Stops sliding to their new places** (**280 ms**): after "Use this order", every stop that moved slides from where it was to where it is now, so you can see what the suggestion changed. The same happens when a new stop goes in by its time (the ones below make room), when a stop is removed or moved to another day (the gap closes), and on the packing list when an item is removed. Calm: the rows are simply in their new places.
+- **A strip's paint edge** (packed, budget): when a tick or a bill changes the share, the ink edge slides to the new place (280 ms). The paint is drawn as a full-width strip slid out of its frame, so this is a transform, not a width change; on first view it is simply there. Calm: instant.
+- **A stop's stone planted on the map:** when you add a stop with a place, its map stone rises out of the ground where it stands (**240 ms**), on the Day plan map. Pins that were already there, and Explore's search results, never rise. Calm: it is simply there.
+
+**7. Leaflet's own motion.** With motion on, the map keeps Leaflet's zoom animation and tile fade (they keep you oriented when the map zooms to fit a new stop). Under reduced motion they are switched off, with marker zoom, drag inertia and the animated fit, so the map jumps.
+
+### Kept still on purpose
+The landing page (it explains, it does not perform), page loads and data arriving on load (the forecast filling the stones, search results, the trips list), tab content, hover (outlines thicken at once: a sign does not fade in) and focus, warnings and field errors (they are announced, and focus moves to the first error), every number (no counting up), settle-up turning square (no celebration: settling up is a chore), the spending chart (Recharts' own animation stays off), Explore's result pins.
+
+### How it is held
+- The slop guard's Motion group reads the CSS rule by rule and the JavaScript: keyframes or transitions on anything but transform and opacity; raw durations or easings outside `tokens.css`; a file that animates with no `prefers-reduced-motion` block; any loop but the road dash; transforms on `:hover`; scroll-driven animation, `IntersectionObserver` and smooth scrolling; `element.animate()` outside the motion helper; inline animation styles; motion, count-up, typewriter and confetti libraries (imports and `package.json`); overshooting easings; decorative keyframe names (shimmer, pulse, bounce, float, marquee, glow...); Recharts parts without `isAnimationActive={false}`. `npm test` runs its self-test, which plants an example of each rule and proves it fires (and that the allowed forms do not).
+- The check's Motion section (`npm run check -- --only=motion` runs it alone) watches every animation the page starts, with and without reduced motion, and measures frames.
+- **At rest nothing changed, to the pixel.** Every one-shot animation fills "backwards" (it holds its first frame through any delay, and when it ends the element is back to its own style), so nothing is left half-animated or held on its own layer. Where the old look was a border (the dialog band, the Explore pick) or a fill under a border (choice plates), the stroke is drawn by a cover in the unpainted colour that shrinks away, and at rest the cover is gone. The strips' slid paint is rounded to whole pixels, so its ink edge is as crisp as a laid-out one. Checked by comparing 18 element screenshots (trips row, route, side column, tabs, day stones before and after a pick, stops, packing, members, invite plates both ways, invite links, budget, ledger, dialog, Explore pick, `/status`) between the code before Step 11 and after: all identical except the live timings on `/status`.
 
 ## Slop guard exceptions (slop-ok)
 
@@ -111,7 +167,7 @@ Only two things move, and both mean "still working":
 - **Not found (`*`):** a small "No road / 404" stone and one sentence saying what happened, plus a button back home.
 - **Sign up / log in:** one form on a whitewashed board, set left of centre like a roadside sign rather than a centred modal. Field errors sit under their field with the warning-sign triangle, and focus jumps to the first one. Passwords have a Show button for typing on phones. After logging in, `?next=` brings you back to the page you opened (needed for invite links in Step 5); only TripSync paths are accepted.
 - **Your trips (empty state):** an unpainted stone (dashed outline) and a sentence saying where trips will appear. Not a grey icon with "No data found".
-- **Loading:** a short strip of road whose dashed centre line moves, plus a sentence saying what we are waiting for ("Checking your login"). It stands still under reduced motion. A button that is working stays solid and shows the same moving dash along its bottom.
+- **Loading:** a short strip of road whose dashed centre line moves, plus a sentence saying what we are waiting for ("Checking your login"). It shows only once a wait passes 0.4 s, and stands still under reduced motion. A button that is working stays solid and shows the same moving dash along its bottom.
 - **Service status (`/status`):** the Step 0 build check, kept as a plain page that shows whether the API and database answer. Useful before a demo once the API sleeps on Render.
 - **Your trips (list, Step 2):** one route-board row per trip, nearest start date first. Each row is a small stone (destination on the cap, number of days on the face) beside the trip name, place and dates, a plain line ("Starts in 5 days. 4 people. You own this trip.") and the budget strip. The whole row is one link; hover thickens its outline like a button. On a phone the stone sits above the lines.
 - **Budget strip:** spent against budget as a flat painted bar in an ink frame. Over budget turns the fill and the "over budget" words road-sign red. No budget set says so in words instead of drawing an empty bar.
@@ -165,7 +221,7 @@ Data choices:
 
 - **Explore tab** (`/trips/:id/explore`): "Around Manali", then four plates (Cafes, Restaurants, Places to stay, Things to see), a distance (within 2, 5 or 10 km of the centre) and, for owners and editors, "Add places to: Day 2". Changing any of them searches again.
 - **Results:** a route board, one row per place, nearest first: a small stone with an **ink cap** and its number (the same number as its pin), the name, the address, and "1.2 km from the centre of Manali, in a straight line". A place already in the plan says "On Day 2" with a link to that day. One button per row, "Add to Day 2". No ratings, no stars, no photos, no opening hours: Geoapify gives none, and TripSync does not make them up. A source line says the places come from Geoapify using OpenStreetMap data.
-- **Map:** the 0 stone for the centre and an ink-capped stone per place. Ink caps mean "a place you could go"; yellow caps (the day plan) mean "a stop you planned". Picking a place (its name, or its pin) marks its row with a yellow band down the edge and pales the other pins; the list jumps to it without a smooth scroll (motion stays limited to the road dash).
+- **Map:** the 0 stone for the centre and an ink-capped stone per place. Ink caps mean "a place you could go"; yellow caps (the day plan) mean "a stop you planned". Picking a place (its name, or its pin) marks its row with a yellow band down the edge and pales the other pins; the list jumps to it without a smooth scroll, and the band is painted down as it appears (see "Motion").
 - **States:** loading is the road loader ("Looking for cafes near Manali"); empty is an unpainted stone and a sentence suggesting a wider distance; a failed search shows a warning board with "Try the search again" in the results only, while the map, tabs and the rest of the trip keep working.
 
 Data choices:
@@ -248,6 +304,8 @@ Data choices:
 - Settings (server only, never the browser): `VISUALCROSSING_KEY` and `OPENWEATHER_KEY` (empty = that backup off), and `WEATHER_PROVIDER` = `auto` (default), `open-meteo`, `visualcrossing` or `openweather` (to test one on purpose).
 
 ## Change log
+
+- 2026-10-12, Step 11: motion revamp (section "Motion"). The road dash waits 0.4 s and pulls away; the `/status` turning square became a dashed outline whose dashes run round it, painted solid or replaced by the warning sign on arrival; pressed plates on every pressable control; paint strokes for the tab cap, the picked day, choice plates, ticks, role plates, the Explore pick and dialog bands; wet paint on new rows; days travel, stops slide, strip edges slide, new stop stones rise. Timings and easings named in `tokens.css`; `utils/motion.js` is the only JavaScript that animates; slop guard Motion group with a self-test. No colour, font, layout or copy changed.
 
 - 2026-10-12: backup forecasts when Open-Meteo refuses: Visual Crossing (15 days) first, OpenWeather (5 days) second. The weather box's source line says which one answered and why, with "Powered by Visual Crossing Weather" when it is Visual Crossing.
 

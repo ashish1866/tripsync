@@ -7,6 +7,11 @@
   away, and the row looks exactly as it did before. It answers "where did my
   new item go?" on a long list, and never plays for rows that were already there.
   Put the class on the new row only (the pages keep the id of what they added).
+
+  Every one-shot animation in TripSync fills "backwards": it holds its first
+  frame through any delay, and when it ends the element is back to its own
+  style, which is the same as the last frame. Nothing stays half-animated, so
+  at rest every screen draws exactly as it did before Step 11.
 */
 .ts-wet {
   position: relative;
@@ -22,9 +27,13 @@
   background: var(--cap);
   transform-origin: top;
   pointer-events: none;
+  /* Dry is the resting state. While wet, the drying animation holds the band
+     at full strength (its "from") through its delay; when it ends nothing is
+     left running, so the row renders exactly as it did before. */
+  opacity: 0;
   animation:
-    ts-paint-down var(--t-paint) var(--ease-brush) both,
-    ts-dry var(--t-dry) var(--ease-settle) var(--t-wet) both;
+    ts-paint-down var(--t-paint) var(--ease-brush) backwards,
+    ts-dry var(--t-dry) var(--ease-settle) var(--t-wet) backwards;
 }
 
 @keyframes ts-paint-down {
@@ -45,11 +54,12 @@
   }
 }
 
-/* Calm version: no stroke. The band is simply there, then fades: a plain fade.
+/* Calm version: no stroke. The band is simply there (the drying animation's
+   first frame, held through the wet time), then fades: a plain fade.
    !important and the class selector win over global.css's blanket rule, which
    would otherwise shorten this fade to nothing and hide the band. */
 @media (prefers-reduced-motion: reduce) {
   .ts-wet::after {
-    animation: ts-dry var(--t-dry) var(--ease-settle) var(--t-wet) both !important;
+    animation: ts-dry var(--t-dry) var(--ease-settle) var(--t-wet) backwards !important;
   }
 }

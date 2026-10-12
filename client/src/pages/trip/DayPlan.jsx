@@ -106,73 +106,76 @@ export default function DayPlan() {
       </section>
 
       <div className={styles.layout}>
-        <section ref={dayPanel} className={styles.stops} aria-labelledby="day-title">
-          <h2 id="day-title" className={styles.dayTitle}>
-            Day {dayNumber}, {formatWeekday(day.date)} {formatDate(day.date)}
-          </h2>
-          <p className={styles.count}>{day.activities.length ? plural(day.activities.length, 'stop') : 'No stops yet.'}</p>
-          <DayForecast weather={weather} day={day} />
-          {problem && <Notice tone="warning">{problem}</Notice>}
+        <section className={styles.stops} aria-labelledby="day-title">
+          {/* What changes with the day travels in; the boards below it stay put. */}
+          <div ref={dayPanel}>
+            <h2 id="day-title" className={styles.dayTitle}>
+              Day {dayNumber}, {formatWeekday(day.date)} {formatDate(day.date)}
+            </h2>
+            <p className={styles.count}>{day.activities.length ? plural(day.activities.length, 'stop') : 'No stops yet.'}</p>
+            <DayForecast weather={weather} day={day} />
+            {problem && <Notice tone="warning">{problem}</Notice>}
 
-          {day.activities.length === 0 && (
-            <div className={styles.empty}>
-              <StopNumber number="" onMap={false} />
-              <p>
-                {canPlan
-                  ? `Nothing is planned for Day ${dayNumber}. Add the first stop below: a place to see, a meal, the drive.`
-                  : `Nothing is planned for Day ${dayNumber} yet. The owner or an editor adds stops.`}
-              </p>
-            </div>
-          )}
+            {day.activities.length === 0 && (
+              <div className={styles.empty}>
+                <StopNumber number="" onMap={false} />
+                <p>
+                  {canPlan
+                    ? `Nothing is planned for Day ${dayNumber}. Add the first stop below: a place to see, a meal, the drive.`
+                    : `Nothing is planned for Day ${dayNumber} yet. The owner or an editor adds stops.`}
+                </p>
+              </div>
+            )}
 
-          {day.activities.length > 0 && (
-            <ol ref={stopList} className={styles.list} aria-label={`Stops on Day ${dayNumber}`}>
-              {day.activities.map((stop, i) => (
-                <li key={stop.id} data-shift-id={stop.id} className={`${styles.stop} ${stop.id === freshId ? 'ts-wet' : ''}`}>
-                  {editingId === stop.id ? (
-                    <div className={styles.editBoard}>
-                      <h3 className={styles.editTitle}>Edit stop {i + 1}</h3>
-                      <StopForm
-                        trip={trip}
-                        dayNumber={dayNumber}
-                        stop={stop}
-                        onSaved={(next) => {
-                          setTrip(next);
-                          setEditingId(null);
-                        }}
-                        onCancel={() => setEditingId(null)}
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <StopNumber number={i + 1} onMap={Boolean(stop.place)} />
-                      <div className={styles.stopText}>
-                        <h3 className={styles.stopTitle}>
-                          {stop.time && <span className={styles.time}>{formatTime(stop.time)}</span>}
-                          {stop.title}
-                        </h3>
-                        <p className={styles.where}>
-                          {stop.place ? [stop.place.name !== stop.title && stop.place.name, stop.place.address].filter(Boolean).join(', ') || 'On the map' : 'No map point'}
-                        </p>
-                        {stop.notes && <p className={styles.notes}>{stop.notes}</p>}
-                        <p className={styles.by}>Added by {names.get(stop.addedBy) || 'a former member'}</p>
+            {day.activities.length > 0 && (
+              <ol ref={stopList} className={styles.list} aria-label={`Stops on Day ${dayNumber}`}>
+                {day.activities.map((stop, i) => (
+                  <li key={stop.id} data-shift-id={stop.id} className={`${styles.stop} ${stop.id === freshId ? 'ts-wet' : ''}`}>
+                    {editingId === stop.id ? (
+                      <div className={styles.editBoard}>
+                        <h3 className={styles.editTitle}>Edit stop {i + 1}</h3>
+                        <StopForm
+                          trip={trip}
+                          dayNumber={dayNumber}
+                          stop={stop}
+                          onSaved={(next) => {
+                            setTrip(next);
+                            setEditingId(null);
+                          }}
+                          onCancel={() => setEditingId(null)}
+                        />
                       </div>
-                      {canPlan && (
-                        <div className={styles.stopActions}>
-                          <Button variant="plain" className={styles.small} onClick={() => setEditingId(stop.id)} aria-label={`Edit ${stop.title}`}>
-                            Edit
-                          </Button>
-                          <Button variant="plain" className={styles.small} onClick={() => setRemoving(stop)} aria-label={`Remove ${stop.title}`}>
-                            Remove
-                          </Button>
+                    ) : (
+                      <>
+                        <StopNumber number={i + 1} onMap={Boolean(stop.place)} />
+                        <div className={styles.stopText}>
+                          <h3 className={styles.stopTitle}>
+                            {stop.time && <span className={styles.time}>{formatTime(stop.time)}</span>}
+                            {stop.title}
+                          </h3>
+                          <p className={styles.where}>
+                            {stop.place ? [stop.place.name !== stop.title && stop.place.name, stop.place.address].filter(Boolean).join(', ') || 'On the map' : 'No map point'}
+                          </p>
+                          {stop.notes && <p className={styles.notes}>{stop.notes}</p>}
+                          <p className={styles.by}>Added by {names.get(stop.addedBy) || 'a former member'}</p>
                         </div>
-                      )}
-                    </>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
+                        {canPlan && (
+                          <div className={styles.stopActions}>
+                            <Button variant="plain" className={styles.small} onClick={() => setEditingId(stop.id)} aria-label={`Edit ${stop.title}`}>
+                              Edit
+                            </Button>
+                            <Button variant="plain" className={styles.small} onClick={() => setRemoving(stop)} aria-label={`Remove ${stop.title}`}>
+                              Remove
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
 
           {canPlan && day.activities.length >= 2 && (
             <div className={styles.best}>

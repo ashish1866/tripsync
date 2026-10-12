@@ -98,11 +98,11 @@
    one stroke. Failed: the warning sign is put up from its base. */
 .ok .arrived {
   transform-origin: bottom;
-  animation: paint-up var(--t-paint) var(--ease-brush) both;
+  animation: paint-up var(--t-paint) var(--ease-brush) backwards;
 }
 
 .error .arrived {
-  animation: put-up var(--t-plant) var(--ease-settle) both;
+  animation: put-up var(--t-plant) var(--ease-settle) backwards;
 }
 
 @keyframes paint-up {

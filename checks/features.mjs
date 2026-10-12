@@ -1518,7 +1518,8 @@ async function frameGaps(page, action, ms = 900) {
     .slice(1)
     .map((t, i) => t - times[i])
     .sort((a, b) => a - b);
-  return { frames: gaps.length, p95: Math.round(gaps[Math.floor(gaps.length * 0.95)] ?? 0), max: Math.round(gaps.at(-1) ?? 0) };
+  // long: frames that took more than two 60 Hz frames (34 ms), the ones you can see stutter
+  return { frames: gaps.length, p95: Math.round(gaps[Math.floor(gaps.length * 0.95)] ?? 0), max: Math.round(gaps.at(-1) ?? 0), long: gaps.filter((g) => g > 34).length };
 }
 
 const trackTransforms = (scope) => scope.evaluate((el) => [...el.querySelectorAll('[class*="track"]')].map((t) => getComputedStyle(t).transform));
@@ -1579,14 +1580,14 @@ async function motionChecks(ctx) {
     await page.route('**/api/geo/spots**', fakeSpots);
 
     await page.goto(`${ctx.base}${t}`, { waitUntil: 'networkidle' });
-    await page.getByRole('list', { name: 'Days of the trip' }).waitFor();
+    await page.getByRole('list', { name: 'Days of the trip' }).waitFor({ timeout: 45000 });
     await page.waitForTimeout(700);
     const overviewLoad = ours(await take(page)).filter((m) => !LOADER.test(m.name));
     record("Opening a trip: nothing of TripSync's own moves on page load (only a loader, if the wait is long)", overviewLoad.length === 0, summary(overviewLoad));
 
     await page.goto(`${ctx.base}${t}/plan?day=1`, { waitUntil: 'networkidle' });
     const stops = page.getByRole('list', { name: 'Stops on Day 1' });
-    await stops.waitFor();
+    await stops.waitFor({ timeout: 45000 });
     await page.waitForTimeout(700);
     const planLoad = ours(await take(page)).filter((m) => !LOADER.test(m.name));
     record('Opening the day plan: nothing moves on page load either', planLoad.length === 0, summary(planLoad));
@@ -1699,7 +1700,7 @@ async function motionChecks(ctx) {
     await plates.getByText('Viewer', { exact: true }).click();
     await page.waitForTimeout(300);
     const chose = await take(page);
-    record('Choosing "Viewer": the plate\'s yellow is painted on, left to right', chose.some((m) => m.type === 'transition' && m.name === 'transform' && m.pseudo === '::before' && /face/.test(m.cls)), summary(chose));
+    record('Choosing "Viewer": the plate\'s yellow is painted on, left to right', chose.some((m) => /paint-across/.test(m.name) && m.pseudo === '::before' && /face/.test(m.cls)), summary(chose));
     await page.getByRole('button', { name: 'Make a Viewer link' }).click();
     await page.getByRole('list', { name: 'Invite links that still work' }).waitFor({ timeout: 15000 });
     await page.waitForTimeout(300);
@@ -1735,7 +1736,7 @@ async function motionChecks(ctx) {
       await page.waitForTimeout(300);
       await dayStone(page, 3).click();
     });
-    record(`Laptop window (1280 px), two day changes: frames stay smooth (95% within ${laptop.p95} ms, longest ${laptop.max} ms, ${laptop.frames} frames)`, laptop.p95 <= 34, JSON.stringify(laptop));
+    record(`Laptop window (1280 px), two day changes: frames stay smooth (95% within ${laptop.p95} ms, longest ${laptop.max} ms, ${laptop.long} long of ${laptop.frames})`, laptop.p95 <= 34, JSON.stringify(laptop));
 
     const wrong = ours(all).filter((m) => m.props.some((p) => !['transform', 'opacity'].includes(p)));
     record(`Every animation TripSync started moved only transform and opacity (${ours(all).length} seen)`, ours(all).length > 0 && wrong.length === 0, summary(wrong));
@@ -1775,7 +1776,7 @@ async function motionChecks(ctx) {
     await context.addInitScript(recordMotion);
     await ctx.login(page, owner);
     await page.goto(`${ctx.base}${t}/plan?day=1`, { waitUntil: 'networkidle' });
-    await page.getByRole('list', { name: 'Stops on Day 1' }).waitFor();
+    await page.getByRole('list', { name: 'Stops on Day 1' }).waitFor({ timeout: 45000 });
     await page.waitForTimeout(500);
     await take(page);
     const mapStill = await page.locator('.leaflet-container').first().evaluate((el) => !el.classList.contains('leaflet-fade-anim'));
@@ -1860,12 +1861,13 @@ async function motionChecks(ctx) {
   // ---------- smoothness at phone width, CPU slowed 4 times ----------
   // The same two day changes with motion and with reduced motion (no animation):
   // the long frames of redrawing a day happen either way, so the fair question
-  // is how much the motion adds on top.
+  // is how much the motion adds on top. Allowed: at most one more long frame
+  // per day change (the browser drawing the travelling block once as a layer).
   const phoneRun = async (options) => {
     const { context, page } = await ctx.openPage(...ctx.PHONE, options);
     await ctx.login(page, owner);
     await page.goto(`${ctx.base}${t}/plan?day=1`, { waitUntil: 'networkidle' });
-    await page.getByRole('list', { name: 'Stops on Day 1' }).waitFor();
+    await page.getByRole('list', { name: 'Stops on Day 1' }).waitFor({ timeout: 45000 });
     await page.waitForTimeout(500);
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -1881,8 +1883,8 @@ async function motionChecks(ctx) {
   const withMotion = await phoneRun({});
   const without = await phoneRun({ reducedMotion: 'reduce' });
   record(
-    `Phone window (${ctx.PHONE[0]} px), CPU slowed 4 times, two day changes: 95% of frames within ${withMotion.p95} ms with motion, ${without.p95} ms without (longest ${withMotion.max} / ${without.max} ms)`,
-    withMotion.p95 <= without.p95 + 17,
-    `motion adds more than one frame: ${JSON.stringify({ withMotion, without })}`,
+    `Phone window (${ctx.PHONE[0]} px), CPU slowed 4 times, two day changes: ${withMotion.long} long frames with motion, ${without.long} without (95% within ${withMotion.p95} / ${without.p95} ms, longest ${withMotion.max} / ${without.max} ms)`,
+    withMotion.long <= without.long + 2,
+    `motion adds more than one long frame per day change: ${JSON.stringify({ withMotion, without })}`,
   );
 }

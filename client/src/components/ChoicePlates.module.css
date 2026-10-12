@@ -47,17 +47,32 @@
   transition: transform var(--t-release) var(--ease-settle);
 }
 
-/* The yellow of a chosen plate is its own layer, so choosing a plate can
-   paint it on left to right in one stroke. Un-choosing is instant. */
+/* Choosing a plate paints its yellow on, left to right, in one stroke: a
+   stone-coloured cover behind the lettering shrinks away to the right and
+   uncovers the yellow. At rest the cover is gone (scaled to nothing), so a
+   plate is drawn exactly as before. Only the plate you just chose plays it
+   (.painting, set by the component); un-choosing is instant. */
 .face::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
-  border-radius: 1px;
-  background: var(--cap);
+  background: var(--stone);
   transform: scaleX(0);
-  transform-origin: left;
+  transform-origin: right;
+}
+
+.painting .input:checked + .face::before {
+  animation: paint-across var(--t-paint) var(--ease-brush) backwards;
+}
+
+@keyframes paint-across {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
 }
 
 .label {
@@ -79,9 +94,8 @@
 }
 
 /* Chosen: painted cap yellow */
-.input:checked + .face::before {
-  transform: scaleX(1);
-  transition: transform var(--t-paint) var(--ease-brush);
+.input:checked + .face {
+  background: var(--cap);
 }
 
 /* Pressed: down 1px at once, like a button */
@@ -173,8 +187,11 @@
 
 /* Calm version: the yellow is simply there; the press still shows */
 @media (prefers-reduced-motion: reduce) {
-  .face,
-  .input:checked + .face::before {
+  .face {
     transition: none;
+  }
+
+  .painting .input:checked + .face::before {
+    animation: none;
   }
 }

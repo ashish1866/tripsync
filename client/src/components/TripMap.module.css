@@ -124,7 +124,7 @@
 
 /* A stop just added: its stone rises out of the ground where it stands */
 .map :global(.ts-pin-planted) {
-  animation: rise var(--t-plant) var(--ease-settle) both;
+  animation: rise var(--t-plant) var(--ease-settle) backwards;
 }
 
 @keyframes rise {

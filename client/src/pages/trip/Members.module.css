@@ -101,7 +101,7 @@
   background: var(--ink);
   border-radius: var(--radius-sm);
   transform-origin: left;
-  animation: repaint var(--t-paint) var(--ease-brush) both;
+  animation: repaint var(--t-paint) var(--ease-brush) backwards;
 }
 
 @keyframes repaint {

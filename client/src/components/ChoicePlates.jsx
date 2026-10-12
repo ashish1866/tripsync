@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import styles from './ChoicePlates.module.css';
 
 // Pick from a few options, drawn as painted plates side by side.
@@ -9,8 +9,12 @@ import styles from './ChoicePlates.module.css';
 export default function ChoicePlates({ legend, options, value, onChange, disabled = false, name, multiple = false, error, compact = false }) {
   const autoName = useId();
   const errorId = `${autoName}-error`;
+  // The plate the user just chose gets its yellow painted on (see the CSS);
+  // plates chosen when the form opens are simply yellow.
+  const [painting, setPainting] = useState(null);
   const chosen = (v) => (multiple ? value.includes(v) : value === v);
   const toggle = (v) => {
+    setPainting(v);
     if (!multiple) return onChange(v);
     // Keep the options' own order, so the split order never depends on click order.
     const next = value.includes(v) ? value.filter((x) => x !== v) : [...value, v];
@@ -21,7 +25,7 @@ export default function ChoicePlates({ legend, options, value, onChange, disable
       <legend className={styles.legend}>{legend}</legend>
       <div className={styles.plates}>
         {options.map((o) => (
-          <label key={o.value} className={styles.plate}>
+          <label key={o.value} className={`${styles.plate} ${painting === o.value ? styles.painting : ''}`}>
             <input
               type={multiple ? 'checkbox' : 'radio'}
               className={styles.input}

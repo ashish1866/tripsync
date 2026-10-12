@@ -16,8 +16,8 @@
   gap: var(--dash-gap);
   width: max-content;
   animation:
-    appear var(--t-appear) var(--ease-settle) var(--dash-wait) both,
-    pull-away calc(var(--dash-speed) * 2) var(--ease-pull-away) var(--dash-wait) both,
+    appear var(--t-appear) var(--ease-settle) var(--dash-wait) backwards,
+    pull-away calc(var(--dash-speed) * 2) var(--ease-pull-away) var(--dash-wait) backwards,
     slide var(--dash-speed) var(--ease-road) calc(var(--dash-wait) + var(--dash-speed) * 2) infinite;
 }
 
@@ -90,6 +90,6 @@
    (it is not motion; --t-appear is 0 here, so they simply appear). */
 @media (prefers-reduced-motion: reduce) {
   .track {
-    animation: appear var(--t-appear) var(--ease-settle) var(--dash-wait) both;
+    animation: appear var(--t-appear) var(--ease-settle) var(--dash-wait) backwards;
   }
 }

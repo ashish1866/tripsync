@@ -83,12 +83,12 @@
    after a move; the first view of the trip shows the cap already painted. */
 .tabs[data-moved='right'] .current::before {
   transform-origin: left;
-  animation: paint-across var(--t-paint) var(--ease-brush) both;
+  animation: paint-across var(--t-paint) var(--ease-brush) backwards;
 }
 
 .tabs[data-moved='left'] .current::before {
   transform-origin: right;
-  animation: paint-across var(--t-paint) var(--ease-brush) both;
+  animation: paint-across var(--t-paint) var(--ease-brush) backwards;
 }
 
 @keyframes paint-across {

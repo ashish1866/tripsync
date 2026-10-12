@@ -6,7 +6,7 @@
   gap: var(--space-3);
   justify-items: start;
   width: min(20rem, 100%);
-  animation: appear var(--t-appear) var(--ease-settle) var(--t-wait) both;
+  animation: appear var(--t-appear) var(--ease-settle) var(--t-wait) backwards;
 }
 
 @keyframes appear {
@@ -21,7 +21,7 @@
 /* Calm version: the same wait (it is not motion), then it is simply there. */
 @media (prefers-reduced-motion: reduce) {
   .wrap {
-    animation: appear var(--t-appear) var(--ease-settle) var(--t-wait) both;
+    animation: appear var(--t-appear) var(--ease-settle) var(--t-wait) backwards;
   }
 }
 

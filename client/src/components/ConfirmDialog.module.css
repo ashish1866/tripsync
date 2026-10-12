@@ -4,15 +4,21 @@
   background: var(--stone);
   color: var(--ink);
   border: var(--line);
-  border-top: 8px solid transparent; /* the band is painted over this edge, see ::before */
+  border-top: 8px solid var(--signal); /* the red band of a warning board */
   border-radius: var(--radius-sm);
-  overflow: visible; /* lets the band sit on the top edge; the question is short and never scrolls */
+  overflow: visible; /* lets the band's cover sit on the top edge; the question is short and never scrolls */
 }
 
-/* The band of a warning board: red, because this destroys something. It is
-   painted across, left to right, as the board appears, so the colour (the
-   message) is the first thing that moves. At rest it covers the top edge
-   exactly as the old 8px red top border did. */
+/* A question that destroys nothing (for example "Mark as paid"): the yellow band */
+.calm {
+  border-top-color: var(--cap);
+}
+
+/* The band is painted across, left to right, as the board appears, so the
+   colour (the message) is the first thing that moves. It is drawn by a
+   stone-coloured cover over the band that shrinks away to the right: the same
+   look as paint going on, and at rest the cover is gone, so the board is the
+   one drawn before Step 11, pixel for pixel. */
 .dialog::before {
   content: '';
   position: absolute;
@@ -20,22 +26,19 @@
   left: -2px;
   right: -2px;
   height: 8px;
-  background: var(--signal);
+  background: var(--stone);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  transform-origin: left;
-}
-
-/* A question that destroys nothing (for example "Mark as paid"): the yellow band */
-.calm::before {
-  background: var(--cap);
+  transform: scaleX(0);
+  transform-origin: right;
+  pointer-events: none;
 }
 
 .dialog[open] {
-  animation: board-in var(--t-appear) var(--ease-settle) both;
+  animation: board-in var(--t-appear) var(--ease-settle) backwards;
 }
 
 .dialog[open]::before {
-  animation: paint-across var(--t-paint) var(--ease-brush) both;
+  animation: paint-across var(--t-paint) var(--ease-brush) backwards;
 }
 
 .dialog::backdrop {
@@ -43,7 +46,7 @@
 }
 
 .dialog[open]::backdrop {
-  animation: board-in var(--t-appear) var(--ease-settle) both;
+  animation: board-in var(--t-appear) var(--ease-settle) backwards;
 }
 
 @keyframes board-in {
@@ -55,12 +58,13 @@
   }
 }
 
+/* The cover shrinking away, which uncovers the band left to right */
 @keyframes paint-across {
   from {
-    transform: scaleX(0);
+    transform: scaleX(1);
   }
   to {
-    transform: scaleX(1);
+    transform: scaleX(0);
   }
 }
 

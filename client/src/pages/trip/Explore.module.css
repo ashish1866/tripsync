@@ -88,32 +88,33 @@
 .selected {
   position: relative;
   background: var(--ground);
+  border-left: 6px solid var(--cap);
+  padding-left: calc(var(--space-4) - 6px);
 }
 
+/* The paint going on is drawn by a cover in the row's own colour over the
+   band, shrinking away downwards; at rest the cover is gone, so the band is
+   the plain border above. */
 .selected::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  left: -6px;
   width: 6px;
-  background: var(--cap);
-  transform-origin: top;
+  background: var(--ground);
+  transform: scaleY(0);
+  transform-origin: bottom;
   pointer-events: none;
-  animation: paint-down var(--t-paint) var(--ease-brush) both;
-}
-
-/* Between rows, the band also covers the thin rule above, as the old border did */
-.place + .selected::after {
-  top: -1px;
+  animation: paint-down var(--t-paint) var(--ease-brush) backwards;
 }
 
 @keyframes paint-down {
   from {
-    transform: scaleY(0);
+    transform: scaleY(1);
   }
   to {
-    transform: scaleY(1);
+    transform: scaleY(0);
   }
 }
 
