@@ -55,7 +55,7 @@ Before the push: delete the fixed test-account pool from Firebase and its data f
 Confirm `tripsync_app` can use a new database `tripsync`; ask Ashish before switching Render's `MONGODB_DB`. Seed script for the Manali demo trip with realistic bills. README run and demo instructions. Then push `main` once, deploy the Worker, run `npm.cmd run check -- --live`, report medians.
 - Done when: the live site shows the seeded Manali trip end to end and the live check passes.
 
-## - [ ] Step 11: Motion revamp
+## - [x] Step 11: Motion revamp
 Asked for by Ashish on 12-Oct-2026 while Step 10 waits on the demo-trip email (see Blocked in `docs/PROGRESS.md`). Motion only: no colour, font, layout or copy changes. Every animation tells the user something about the road world (still travelling, freshly painted, wet paint, stones moving along the road, a plate pressed) and has a written reason in DESIGN-DECISIONS.md.
 - Done when:
   - The inventory of what moves today and where motion would help is in `docs/PROGRESS.md` before any code changes.

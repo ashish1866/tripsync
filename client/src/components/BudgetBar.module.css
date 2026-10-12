@@ -46,8 +46,17 @@
   height: 100%;
   background: var(--cap);
   border-right: 2px solid var(--ink);
-  transform: translateX(max(round(calc((var(--share) - 1) * 100%), 1px), calc(2px - 100%)));
+  transform: translateX(max(calc((var(--share) - 1) * 100%), calc(2px - 100%)));
   transition: transform var(--t-shift) var(--ease-settle);
+}
+
+/* Where the browser has round() (Chrome 125+, Safari 15.4+, Firefox 118+), the
+   edge sits on whole pixels. Behind @supports, because with var() a declaration
+   the browser cannot use would fall back to no transform at all: a full strip. */
+@supports (transform: translateX(round(1.5px, 1px))) {
+  .fill {
+    transform: translateX(max(round(calc((var(--share) - 1) * 100%), 1px), calc(2px - 100%)));
+  }
 }
 
 .fillOver {
